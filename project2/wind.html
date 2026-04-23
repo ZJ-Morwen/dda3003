@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>海洋风场实时渲染 (陆地遮罩版)</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-velocity@1.2.3/dist/leaflet-velocity.css" />
+    
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; }
+        /* 1. 直接用 CSS 把地图的背景色设为“深海蓝” */
+        #map { width: 100vw; height: 100vh; background-color: #0b1320; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://unpkg.com/leaflet-velocity@1.2.3/dist/leaflet-velocity.min.js"></script>
+
+    <script>
+        var map = L.map('map').setView([35, 110], 3);
+
+        // ==========================================
+        // 核心技巧：创建自定义层级窗格 (Z-Index 控制)
+        // ==========================================
+        
+        // 陆地层级 (450)，盖在风场 (默认400) 的上面
+        map.createPane('landPane');
+        map.getPane('landPane').style.zIndex = 450;
+        
+        // 标签文字层级 (500)，在最顶层，防止名字被陆地遮挡
+        map.createPane('labelPane');
+        map.getPane('labelPane').style.zIndex = 500;
+        // 让文字层鼠标穿透，不影响你拖拽地图
+        map.getPane('labelPane').style.pointerEvents = 'none'; 
+
+        // ==========================================
+        // 图层加载
+        // ==========================================
+
+        // 第一步：加载风场 (底层)
+        $.getJSON('https://onaci.github.io/leaflet-velocity/wind-global.json', function (data) {
+            L.velocityLayer({
+                displayValues: true,
+                displayOptions: {
+                    velocityType: 'Ocean Wind',
+                    displayPosition: 'bottomleft',
+                    displayEmptyString: '无数据'
+                },
+                data: data,
+                maxVelocity: 15,
+                velocityScale: 0.01,
+                // 我给你加了一套偏海洋蓝/青色的粒子配色，更酷炫
+                colorScale: ["#00bfff", "#00ffff", "#7fffd4", "#f0e68c"] 
+            }).addTo(map);
+        });
+
+        // 第二步：加载纯黑灰色的陆地遮罩 (中间层)
+        $.getJSON('https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json', function (landData) {
+            L.geoJSON(landData, {
+                pane: 'landPane', // 指定放入陆地窗格
+                style: {
+                    fillColor: '#FAEBD7', // 白色的陆地
+                    fillOpacity: 1,       // 100% 不透明，完美遮挡陆地上的风
+                    color: '#2a2a2a',     // 微微发亮的海岸线边界
+                    weight: 1
+                },
+                interactive: false // 禁用鼠标交互
+            }).addTo(map);
+        });
+
+        // 第三步：只加载“无背景的纯文字”地图标签 (顶层)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
+            pane: 'labelPane', // 指定放入文字窗格
+            attribution: '© OpenStreetMap © CartoDB',
+            subdomains: 'abcd',
+            maxZoom: 10
+        }).addTo(map);
+
+    </script>
+</body>
+</html>

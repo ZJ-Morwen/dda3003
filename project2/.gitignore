@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+.DS_Store
+data/generated/*.json
+apps/web/dist
+apps/api/dist

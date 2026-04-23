@@ -1,0 +1,272 @@
+{
+  "type": "FeatureCollection",
+  "name": "china_routes",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [121.487, 31.249],
+          [121.544, 29.868]
+        ]
+      },
+      "properties": {
+        "route_id": "R001",
+        "route_name": "沪甬航线",
+        "name_en": "Shanghai-Ningbo Route",
+        "origin": "上海港",
+        "origin_code": "CNSHA",
+        "destination": "宁波舟山港",
+        "destination_code": "CNNGB",
+        "distance_km": 220,
+        "typical_hours": 12,
+        "avg_speed_knots": 12,
+        "route_type": "coastal",
+        "estimated_co2_ton": 450,
+        "vessel_type": "集装箱船/散货船",
+        "frequency_weekly": 50
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [121.487, 31.249],
+          [114.058, 22.543]
+        ]
+      },
+      "properties": {
+        "route_id": "R002",
+        "route_name": "沪深航线",
+        "name_en": "Shanghai-Shenzhen Route",
+        "origin": "上海港",
+        "origin_code": "CNSHA",
+        "destination": "深圳港",
+        "destination_code": "CNSNZ",
+        "distance_km": 1600,
+        "typical_hours": 72,
+        "avg_speed_knots": 15,
+        "route_type": "coastal",
+        "estimated_co2_ton": 4200,
+        "vessel_type": "集装箱船",
+        "frequency_weekly": 20
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [117.733, 38.983],
+          [121.487, 31.249]
+        ]
+      },
+      "properties": {
+        "route_id": "R003",
+        "route_name": "津沪航线",
+        "name_en": "Tianjin-Shanghai Route",
+        "origin": "天津港",
+        "origin_code": "CNTNG",
+        "destination": "上海港",
+        "destination_code": "CNSHA",
+        "distance_km": 1200,
+        "typical_hours": 55,
+        "avg_speed_knots": 15,
+        "route_type": "coastal",
+        "estimated_co2_ton": 3100,
+        "vessel_type": "集装箱船/散货船",
+        "frequency_weekly": 25
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [120.326, 36.067],
+          [121.487, 31.249]
+        ]
+      },
+      "properties": {
+        "route_id": "R004",
+        "route_name": "青沪航线",
+        "name_en": "Qingdao-Shanghai Route",
+        "origin": "青岛港",
+        "origin_code": "CNQDG",
+        "destination": "上海港",
+        "destination_code": "CNSHA",
+        "distance_km": 780,
+        "typical_hours": 36,
+        "avg_speed_knots": 14,
+        "route_type": "coastal",
+        "estimated_co2_ton": 1800,
+        "vessel_type": "集装箱船",
+        "frequency_weekly": 30
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [113.259, 23.099],
+          [114.058, 22.543]
+        ]
+      },
+      "properties": {
+        "route_id": "R005",
+        "route_name": "广深航线",
+        "name_en": "Guangzhou-Shenzhen Route",
+        "origin": "广州港",
+        "origin_code": "CNGZG",
+        "destination": "深圳港",
+        "destination_code": "CNSNZ",
+        "distance_km": 120,
+        "typical_hours": 6,
+        "avg_speed_knots": 12,
+        "route_type": "coastal",
+        "estimated_co2_ton": 200,
+        "vessel_type": "驳船/集装箱船",
+        "frequency_weekly": 60
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [118.089, 24.445],
+          [114.058, 22.543]
+        ]
+      },
+      "properties": {
+        "route_id": "R006",
+        "route_name": "厦深航线",
+        "name_en": "Xiamen-Shenzhen Route",
+        "origin": "厦门港",
+        "origin_code": "CNXMG",
+        "destination": "深圳港",
+        "destination_code": "CNSNZ",
+        "distance_km": 580,
+        "typical_hours": 28,
+        "avg_speed_knots": 13,
+        "route_type": "coastal",
+        "estimated_co2_ton": 1300,
+        "vessel_type": "集装箱船",
+        "frequency_weekly": 25
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [121.610, 38.920],
+          [121.487, 31.249]
+        ]
+      },
+      "properties": {
+        "route_id": "R007",
+        "route_name": "大沪航线",
+        "name_en": "Dalian-Shanghai Route",
+        "origin": "大连港",
+        "origin_code": "CNDLC",
+        "destination": "上海港",
+        "destination_code": "CNSHA",
+        "distance_km": 1040,
+        "typical_hours": 48,
+        "avg_speed_knots": 14,
+        "route_type": "coastal",
+        "estimated_co2_ton": 2500,
+        "vessel_type": "集装箱船/散货船",
+        "frequency_weekly": 15
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [121.487, 31.249],
+          [118.750, 31.950]
+        ]
+      },
+      "properties": {
+        "route_id": "R008",
+        "route_name": "沪宁航线",
+        "name_en": "Shanghai-Nanjing Route",
+        "origin": "上海港",
+        "origin_code": "CNSHA",
+        "destination": "南京港",
+        "destination_code": "CNNJG",
+        "distance_km": 300,
+        "typical_hours": 24,
+        "avg_speed_knots": 8,
+        "route_type": "inland_river",
+        "estimated_co2_ton": 380,
+        "vessel_type": "内河驳船",
+        "frequency_weekly": 40
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [118.750, 31.950],
+          [114.283, 30.567]
+        ]
+      },
+      "properties": {
+        "route_id": "R009",
+        "route_name": "宁汉航线",
+        "name_en": "Nanjing-Wuhan Route",
+        "origin": "南京港",
+        "origin_code": "CNNJG",
+        "destination": "武汉港",
+        "destination_code": "CNWHN",
+        "distance_km": 520,
+        "typical_hours": 42,
+        "avg_speed_knots": 8,
+        "route_type": "inland_river",
+        "estimated_co2_ton": 650,
+        "vessel_type": "内河驳船",
+        "frequency_weekly": 25
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [114.283, 30.567],
+          [106.620, 29.570]
+        ]
+      },
+      "properties": {
+        "route_id": "R010",
+        "route_name": "汉渝航线",
+        "name_en": "Wuhan-Chongqing Route",
+        "origin": "武汉港",
+        "origin_code": "CNWHN",
+        "destination": "重庆港",
+        "destination_code": "CNCKG",
+        "distance_km": 890,
+        "typical_hours": 72,
+        "avg_speed_knots": 8,
+        "route_type": "inland_river",
+        "estimated_co2_ton": 1100,
+        "vessel_type": "内河驳船",
+        "frequency_weekly": 15
+      }
+    }
+  ]
+}

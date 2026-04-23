@@ -1,0 +1,23 @@
+{
+  "name": "tianjin-qingdao-ais-visualizer",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "preprocess": "tsx tools/preprocess.ts",
+    "dev:api": "npm run dev --workspace @ais-vis/api",
+    "dev:web": "npm run dev --workspace @ais-vis/web",
+    "build:api": "npm run build --workspace @ais-vis/api",
+    "build:web": "npm run build --workspace @ais-vis/web",
+    "build": "npm run preprocess && npm run build:api && npm run build:web",
+    "test:api": "npm run test --workspace @ais-vis/api",
+    "test:web": "npm run test --workspace @ais-vis/web",
+    "test": "npm run preprocess && npm run test:api && npm run test:web"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.1",
+    "typescript": "^5.8.3"
+  }
+}

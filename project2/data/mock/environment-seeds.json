@@ -1,0 +1,29 @@
+{
+  "bounds": [117.0, 35.7, 123.0, 39.2],
+  "layers": {
+    "wind": {
+      "biasX": 0.68,
+      "biasY": 0.22,
+      "frequency": 0.9,
+      "amplitude": 1.0,
+      "swirl": 0.18,
+      "color": "#8bd7ff"
+    },
+    "current": {
+      "biasX": 0.36,
+      "biasY": 0.12,
+      "frequency": 0.55,
+      "amplitude": 0.62,
+      "swirl": 0.24,
+      "color": "#67f3c1"
+    },
+    "wave": {
+      "biasX": 0.18,
+      "biasY": 0.06,
+      "frequency": 1.4,
+      "amplitude": 0.52,
+      "swirl": 0.38,
+      "color": "#ffd87b"
+    }
+  }
+}

@@ -1,0 +1,252 @@
+{
+  "type": "FeatureCollection",
+  "name": "china_ports",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.487, 31.249]
+      },
+      "properties": {
+        "name": "上海港",
+        "name_en": "Shanghai Port",
+        "code": "CNSHA",
+        "province": "上海",
+        "type": "international",
+        "throughput_2023": "4915万TEU",
+        "importance": 1
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.544, 29.868]
+      },
+      "properties": {
+        "name": "宁波舟山港",
+        "name_en": "Ningbo-Zhoushan Port",
+        "code": "CNNGB",
+        "province": "浙江",
+        "type": "international",
+        "throughput_2023": "3530万TEU",
+        "importance": 1
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [114.058, 22.543]
+      },
+      "properties": {
+        "name": "深圳港",
+        "name_en": "Shenzhen Port",
+        "code": "CNSNZ",
+        "province": "广东",
+        "type": "international",
+        "throughput_2023": "2988万TEU",
+        "importance": 1
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [113.259, 23.099]
+      },
+      "properties": {
+        "name": "广州港",
+        "name_en": "Guangzhou Port",
+        "code": "CNGZG",
+        "province": "广东",
+        "type": "international",
+        "throughput_2023": "2540万TEU",
+        "importance": 1
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [120.326, 36.067]
+      },
+      "properties": {
+        "name": "青岛港",
+        "name_en": "Qingdao Port",
+        "code": "CNQDG",
+        "province": "山东",
+        "type": "international",
+        "throughput_2023": "2200万TEU",
+        "importance": 1
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [117.733, 38.983]
+      },
+      "properties": {
+        "name": "天津港",
+        "name_en": "Tianjin Port",
+        "code": "CNTNG",
+        "province": "天津",
+        "type": "international",
+        "throughput_2023": "2100万TEU",
+        "importance": 1
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [118.089, 24.445]
+      },
+      "properties": {
+        "name": "厦门港",
+        "name_en": "Xiamen Port",
+        "code": "CNXMG",
+        "province": "福建",
+        "type": "international",
+        "throughput_2023": "1250万TEU",
+        "importance": 2
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.610, 38.920]
+      },
+      "properties": {
+        "name": "大连港",
+        "name_en": "Dalian Port",
+        "code": "CNDLC",
+        "province": "辽宁",
+        "type": "international",
+        "throughput_2023": "850万TEU",
+        "importance": 2
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [119.680, 34.760]
+      },
+      "properties": {
+        "name": "连云港港",
+        "name_en": "Lianyungang Port",
+        "code": "CNLYG",
+        "province": "江苏",
+        "type": "national",
+        "throughput_2023": "550万TEU",
+        "importance": 2
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [114.170, 22.280]
+      },
+      "properties": {
+        "name": "香港港",
+        "name_en": "Hong Kong Port",
+        "code": "HKHKG",
+        "province": "香港",
+        "type": "international",
+        "throughput_2023": "1440万TEU",
+        "importance": 2
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [120.280, 22.620]
+      },
+      "properties": {
+        "name": "高雄港",
+        "name_en": "Kaohsiung Port",
+        "code": "TWKHH",
+        "province": "台湾",
+        "type": "international",
+        "throughput_2023": "950万TEU",
+        "importance": 2
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [106.620, 29.570]
+      },
+      "properties": {
+        "name": "重庆港",
+        "name_en": "Chongqing Port",
+        "code": "CNCKG",
+        "province": "重庆",
+        "type": "inland_river",
+        "throughput_2023": "120万TEU",
+        "importance": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [114.283, 30.567]
+      },
+      "properties": {
+        "name": "武汉港",
+        "name_en": "Wuhan Port",
+        "code": "CNWHN",
+        "province": "湖北",
+        "type": "inland_river",
+        "throughput_2023": "200万TEU",
+        "importance": 3
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [118.750, 31.950]
+      },
+      "properties": {
+        "name": "南京港",
+        "name_en": "Nanjing Port",
+        "code": "CNNJG",
+        "province": "江苏",
+        "type": "inland_river",
+        "throughput_2023": "320万TEU",
+        "importance": 2
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [108.320, 22.840]
+      },
+      "properties": {
+        "name": "南宁港",
+        "name_en": "Nanning Port",
+        "code": "CNNNG",
+        "province": "广西",
+        "type": "inland_river",
+        "throughput_2023": "60万TEU",
+        "importance": 3
+      }
+    }
+  ]
+}

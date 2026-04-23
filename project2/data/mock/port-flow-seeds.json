@@ -1,0 +1,56 @@
+[
+  {
+    "source": "Tianjin",
+    "target": "Qingdao",
+    "value": 97,
+    "description": "基于真实天津-青岛 AIS 航次计数覆盖。"
+  },
+  {
+    "source": "Shanghai",
+    "target": "Ningbo",
+    "value": 36,
+    "description": "模拟长三角高频近岸航线网络。"
+  },
+  {
+    "source": "Shanghai",
+    "target": "Qingdao",
+    "value": 18,
+    "description": "模拟华东至胶东航运联系。"
+  },
+  {
+    "source": "Ningbo",
+    "target": "Shenzhen",
+    "value": 24,
+    "description": "模拟南北沿海主干运输链。"
+  },
+  {
+    "source": "Qingdao",
+    "target": "Shenzhen",
+    "value": 15,
+    "description": "模拟胶东至珠三角联运走廊。"
+  },
+  {
+    "source": "Tianjin",
+    "target": "Shanghai",
+    "value": 21,
+    "description": "模拟环渤海至长三角航线。"
+  },
+  {
+    "source": "Qingdao",
+    "target": "Ningbo",
+    "value": 12,
+    "description": "模拟华东沿岸支线联通。"
+  },
+  {
+    "source": "Shenzhen",
+    "target": "Shanghai",
+    "value": 14,
+    "description": "模拟珠三角北上航线。"
+  },
+  {
+    "source": "Tianjin",
+    "target": "Shenzhen",
+    "value": 9,
+    "description": "模拟长距离南下补给线路。"
+  }
+]
