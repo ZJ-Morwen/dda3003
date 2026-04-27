@@ -24,6 +24,8 @@ import { WeightsPanel } from "./components/WeightsPanel";
 import { cnNumber } from "./lib/format";
 import { useDashboardStore } from "./store/dashboard-store";
 
+const MAP_ENVIRONMENT_LAYERS = ["wind", "current"] as const;
+
 export default function App() {
   const {
     timeFilter,
@@ -189,14 +191,14 @@ export default function App() {
               <p>地图环境场切换与动画自检</p>
             </div>
             <div className="env-switches">
-              {Object.entries(ENVIRONMENT_LAYER_LABELS).map(([layer, label]) => (
+              {MAP_ENVIRONMENT_LAYERS.map((layer) => (
                 <button
                   key={layer}
                   type="button"
                   className={`env-pill ${envLayer === layer ? "active" : ""}`}
-                  onClick={() => setEnvLayer(layer as "wind" | "current" | "wave")}
+                  onClick={() => setEnvLayer(layer)}
                 >
-                  {label}
+                  {ENVIRONMENT_LAYER_LABELS[layer]}
                 </button>
               ))}
             </div>

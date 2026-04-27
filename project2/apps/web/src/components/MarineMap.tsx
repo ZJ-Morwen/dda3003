@@ -1,5 +1,20 @@
 import React, { useEffect, useRef } from 'react';
 
+const velocityDataUrls = {
+  wind: new URL("../../../../wind-global.json", import.meta.url).href,
+  current: new URL("../../../../ocean-current-global.json", import.meta.url).href
+} as const;
+
+const velocityLayerConfig = {
+  wind: { maxVelocity: 15, velocityScale: 0.01, colorScale: ["#d8dde3", "#f4f6f8", "#ffffff"] },
+  current: { maxVelocity: 1.5, velocityScale: 0.1, colorScale: ["#146cff", "#57b6ff", "#d7f1ff"] }
+} as const;
+
+const CHINA_COAST_BOUNDS = [
+  [13, 104],
+  [47, 150.5]
+] as const;
+
 // 强行向 TypeScript 声明全局变量，解决红线报错
 declare global {
   interface Window {
@@ -9,7 +24,7 @@ declare global {
 }
 
 interface MarineMapProps {
-  mode: 'wind' | 'current' | 'wave';
+  mode: 'wind' | 'current';
   geometry: any; // 接收航线数据
   points: any[]; // 接收轨迹点
   onSelectTimestamp: (ts: string) => void;
@@ -22,7 +37,15 @@ const MarineMap: React.FC<MarineMapProps> = ({ mode, geometry, points, onSelectT
 
   // 1. 初始化基础地图与遮罩
   useEffect(() => {
-    const map = window.L.map('marine-map-container', { zoomControl: false }).setView([37.45, 120.3], 4.5);
+    const map = window.L.map('marine-map-container', {
+      zoomControl: false,
+      maxBounds: CHINA_COAST_BOUNDS,
+      maxBoundsViscosity: 1,
+      zoomDelta: 0.5,
+      zoomSnap: 0.25
+    });
+    map.fitBounds(CHINA_COAST_BOUNDS, { animate: false, padding: [0, 0] });
+    map.setMinZoom(map.getZoom());
     window.L.control.zoom({ position: 'topright' }).addTo(map);
     mapRef.current = map;
 
@@ -41,7 +64,7 @@ const MarineMap: React.FC<MarineMapProps> = ({ mode, geometry, points, onSelectT
       .then(data => {
         window.L.geoJSON(data, {
           pane: 'landPane',
-          style: { fillColor: '#FAEBD7', fillOpacity: 1, color: '#1a2b3c', weight: 1 } 
+          style: { fillColor: '#ead8ad', fillOpacity: 1, color: '#7b6f55', weight: 1 } 
         }).addTo(map);
       });
 
@@ -57,25 +80,39 @@ const MarineMap: React.FC<MarineMapProps> = ({ mode, geometry, points, onSelectT
     if (!mapRef.current) return;
     if (velocityLayerRef.current) mapRef.current.removeLayer(velocityLayerRef.current);
 
-    const url = mode === 'wind'
-      ? 'https://onaci.github.io/leaflet-velocity/wind-global.json'
-      : 'https://onaci.github.io/leaflet-velocity/water-global.json';
+    const map = mapRef.current;
+    const controller = new AbortController();
+    let cancelled = false;
 
-    window.$.getJSON(url, (data: any) => {
+    fetch(velocityDataUrls[mode], { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to load ${mode} velocity data`);
+        }
+        return response.json();
+      })
+      .then((data) => {
+        if (cancelled || !mapRef.current) return;
       // 从你原代码中提取的主题配色
-      const config = mode === 'wind'
-        ? { maxVelocity: 15, velocityScale: 0.01, colorScale: ["#7ed0ff", "#ffffff"] } 
-        : { maxVelocity: 1.5, velocityScale: 0.1, colorScale: ["#54f0bd", "#ffffff"] }; 
-
       const layer = window.L.velocityLayer({
         displayValues: false, // 隐藏左下角自带的数据框，因为你已经有自己的仪表盘了
-        data: data,
-        ...config
+        data,
+        ...velocityLayerConfig[mode]
       });
 
-      layer.addTo(mapRef.current);
+      layer.addTo(map);
       velocityLayerRef.current = layer;
-    });
+      })
+      .catch((error) => {
+        if (!cancelled && error instanceof Error && error.name !== "AbortError") {
+          console.error(error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [mode]);
 
   // 3. 渲染航线 (复刻原 MapLibre 的样式与逻辑)
@@ -107,12 +144,6 @@ const MarineMap: React.FC<MarineMapProps> = ({ mode, geometry, points, onSelectT
     routeLayerGroupRef.current = routeGroup;
 
     // 根据航线自适应缩放视野 (Maplibre 格式转换 Leaflet 格式)
-    if (geometry.bounds && geometry.bounds.length === 4) {
-      map.fitBounds([
-        [geometry.bounds[1], geometry.bounds[0]], // [南lat, 西lon]
-        [geometry.bounds[3], geometry.bounds[2]]  // [北lat, 东lon]
-      ], { padding: [50, 50] });
-    }
   }, [geometry]);
 
   // 4. 处理地图点击选取时间戳事件
