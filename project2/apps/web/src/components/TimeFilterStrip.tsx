@@ -17,26 +17,52 @@ function buildRecentDays(anchorDate: string): string[] {
 
 export function TimeFilterStrip({ anchorDate, value, onChange }: TimeFilterStripProps) {
   const days = buildRecentDays(anchorDate);
+
+  const currentDay = value.startDay;
+  const currentIndex = Math.max(0, days.indexOf(currentDay));
+
+  const handleSliderChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextIndex = Number(event.target.value);
+    const nextDay = days[nextIndex];
+
+    onChange({
+      mode: "single_day",
+      startDay: nextDay,
+    });
+  };
+
   return (
     <div className="panel">
       <div className="panel-header">
-        <h3>时间过滤</h3>
-        <p>最近 7 个自然日</p>
+        <h3>时间轴</h3>
+        <p>拖动滑块查看最近 7 个自然日的航行数据</p>
       </div>
-      <div className="date-strip">
-        {days.map((day) => {
-          const active = value.startDay === day && (value.endDay ?? value.startDay) === day;
-          return (
-            <button
+
+      <div className="time-slider-wrapper">
+        <input
+          type="range"
+          min={0}
+          max={days.length - 1}
+          step={1}
+          value={currentIndex}
+          onChange={handleSliderChange}
+          className="time-slider"
+        />
+
+        <div className="time-slider-labels">
+          {days.map((day) => (
+            <span
               key={day}
-              type="button"
-              className={`date-pill ${active ? "active" : ""}`}
-              onClick={() => onChange({ mode: "single_day", startDay: day })}
+              className={day === currentDay ? "active" : ""}
             >
-              <span>{day.slice(5)}</span>
-            </button>
-          );
-        })}
+              {day.slice(5)}
+            </span>
+          ))}
+        </div>
+
+        <div className="selected-time">
+          当前日期：<strong>{currentDay}</strong>
+        </div>
       </div>
     </div>
   );

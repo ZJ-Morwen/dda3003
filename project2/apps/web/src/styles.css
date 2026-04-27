@@ -166,6 +166,43 @@ button {
   border-color: rgba(142, 212, 255, 0.52);
 }
 
+.time-slider-wrapper {
+  display: grid;
+  gap: 12px;
+}
+
+.time-slider {
+  width: 100%;
+  cursor: pointer;
+  accent-color: #65baff;
+}
+
+.time-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #8fb4d0;
+  font-size: 12px;
+}
+
+.time-slider-labels span {
+  white-space: nowrap;
+}
+
+.time-slider-labels span.active {
+  color: #ecf6ff;
+  font-weight: 700;
+}
+
+.selected-time {
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(10, 31, 47, 0.85);
+  border: 1px solid rgba(132, 173, 214, 0.12);
+  color: #c9def0;
+  font-size: 13px;
+}
+
 .chart-panel {
   min-height: 260px;
 }
