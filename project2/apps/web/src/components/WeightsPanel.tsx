@@ -1,4 +1,5 @@
 import type { EChartsOption } from "echarts";
+
 import type { DashboardSnapshot } from "../lib/api";
 import { Badge } from "./Badge";
 import { EChart } from "./EChart";
@@ -9,6 +10,7 @@ interface WeightsPanelProps {
 
 export function WeightsPanel({ snapshot }: WeightsPanelProps) {
   const { weights } = snapshot;
+
   const option: EChartsOption = {
     tooltip: { trigger: "item" },
     legend: {
@@ -29,9 +31,9 @@ export function WeightsPanel({ snapshot }: WeightsPanelProps) {
           formatter: "{b}\n{d}%"
         },
         data: [
-          { name: "风场", value: weights.weights.wind, itemStyle: { color: "#7ed0ff" } },
-          { name: "洋流", value: weights.weights.current, itemStyle: { color: "#54f0bd" } },
-          { name: "波浪", value: weights.weights.wave, itemStyle: { color: "#ffd36b" } }
+          { name: "Wind", value: weights.weights.wind, itemStyle: { color: "#7ed0ff" } },
+          { name: "Current", value: weights.weights.current, itemStyle: { color: "#54f0bd" } },
+          { name: "Wave", value: weights.weights.wave, itemStyle: { color: "#ffd36b" } }
         ]
       }
     ]
@@ -41,8 +43,8 @@ export function WeightsPanel({ snapshot }: WeightsPanelProps) {
     <div className="panel chart-panel">
       <div className="panel-header">
         <div>
-          <h3>环境权重饼图</h3>
-          <p>当前时间窗下的环境影响占比</p>
+          <h3>Environment Mix</h3>
+          <p>Support-layer weights used to provide voyage context on the map.</p>
         </div>
         <Badge sourceType={weights.sourceType} />
       </div>

@@ -13,7 +13,7 @@ interface SeriesPanelsProps {
   onSelectTimestamp: (timestamp: string) => void;
 }
 
-function chartCommon(
+function buildSeriesOption(
   points: EmissionSeriesPoint[],
   yName: string,
   actualKey: "actualEmission" | "actualSpeed",
@@ -37,7 +37,7 @@ function chartCommon(
     },
     series: [
       {
-        name: "实际",
+        name: "Actual",
         type: "line",
         smooth: true,
         showSymbol: true,
@@ -54,7 +54,7 @@ function chartCommon(
             : undefined
       },
       {
-        name: "标准",
+        name: "Reference",
         type: "line",
         smooth: true,
         showSymbol: true,
@@ -77,6 +77,8 @@ export function SeriesPanels({
   onHoverTimestamp,
   onSelectTimestamp
 }: SeriesPanelsProps) {
+  const activePoint = points.find((point) => point.ts === selectedTimestamp) ?? points[0];
+
   const deltaOption: EChartsOption = {
     grid: { left: 50, right: 24, top: 28, bottom: 36 },
     tooltip: { trigger: "axis" },
@@ -87,7 +89,7 @@ export function SeriesPanels({
     },
     yAxis: {
       type: "value",
-      name: "Δ排放",
+      name: "Delta",
       splitLine: { lineStyle: { color: "rgba(166,193,225,0.08)" } }
     },
     series: [
@@ -114,8 +116,6 @@ export function SeriesPanels({
     ]
   };
 
-  const activePoint = points.find((point) => point.ts === selectedTimestamp) ?? points[0];
-
   const commonEvents = {
     click: (params: unknown) => {
       const payload = params as { data?: { ts?: string } };
@@ -134,36 +134,38 @@ export function SeriesPanels({
       <div className="panel chart-panel">
         <div className="panel-header">
           <div>
-            <h3>排放-时间曲线</h3>
-            <p>实际 vs 标准</p>
+            <h3>Emission Trend</h3>
+            <p>Actual vs reference</p>
           </div>
           {sourceType ? <Badge sourceType={sourceType} /> : null}
         </div>
         <EChart
           className="chart small-chart"
-          option={chartCommon(points, "score", "actualEmission", "standardEmission")}
+          option={buildSeriesOption(points, "score", "actualEmission", "standardEmission")}
           onEvents={commonEvents}
         />
       </div>
+
       <div className="panel chart-panel">
         <div className="panel-header">
           <div>
-            <h3>速度-时间曲线</h3>
-            <p>速度对排放的影响解释</p>
+            <h3>Speed Trend</h3>
+            <p>Speed impact along the voyage</p>
           </div>
           {sourceType ? <Badge sourceType={sourceType} /> : null}
         </div>
         <EChart
           className="chart small-chart"
-          option={chartCommon(points, "节", "actualSpeed", "standardSpeed")}
+          option={buildSeriesOption(points, "kn", "actualSpeed", "standardSpeed")}
           onEvents={commonEvents}
         />
       </div>
+
       <div className="panel chart-panel">
         <div className="panel-header">
           <div>
-            <h3>累计差值曲线</h3>
-            <p>当前点 Δ={cnNumber(activePoint?.deltaCumulative ?? 0)}</p>
+            <h3>Cumulative Delta</h3>
+            <p>Current point Δ={cnNumber(activePoint?.deltaCumulative ?? 0)}</p>
           </div>
           {sourceType ? <Badge sourceType={sourceType} /> : null}
         </div>

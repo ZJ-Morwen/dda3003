@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as d3 from "d3";
 
 import type { PortFlow } from "../../../../shared/contracts";
@@ -10,35 +10,55 @@ interface ChordPanelProps {
   onSelect: (flow: PortFlow) => void;
 }
 
-export function ChordPanel({
-  flows,
-  selectedPortPair,
-  onSelect
-}: ChordPanelProps) {
+export function ChordPanel({ flows, selectedPortPair, onSelect }: ChordPanelProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
+
+  const ports = useMemo(
+    () =>
+      [...new Set(flows.flatMap((flow) => [flow.source, flow.target]))].sort((left, right) =>
+        left.localeCompare(right)
+      ),
+    [flows]
+  );
 
   useEffect(() => {
     if (!svgRef.current || flows.length === 0) return;
+
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
-    const width = 320;
-    const height = 320;
-    const outerRadius = Math.min(width, height) * 0.45;
-    const innerRadius = outerRadius - 20;
-    const ports = [...new Set(flows.flatMap((flow) => [flow.source, flow.target]))];
+
+    const width = 400;
+    const height = 400;
+    const outerRadius = Math.min(width, height) * 0.42;
+    const innerRadius = outerRadius - 28;
     const portIndex = new Map(ports.map((port, index) => [port, index]));
     const matrix = Array.from({ length: ports.length }, () =>
       Array.from({ length: ports.length }, () => 0)
     );
+
     flows.forEach((flow) => {
-      matrix[portIndex.get(flow.source) ?? 0][portIndex.get(flow.target) ?? 0] =
-        flow.value;
+      const sourceIndex = portIndex.get(flow.source);
+      const targetIndex = portIndex.get(flow.target);
+      if (sourceIndex === undefined || targetIndex === undefined) {
+        return;
+      }
+      matrix[sourceIndex][targetIndex] = flow.value;
     });
+
     const color = d3
       .scaleOrdinal<string, string>()
       .domain(ports)
-      .range(["#7ac7ff", "#7bf0b4", "#ffc86a", "#df91ff", "#ff8e72"]);
-    const chord = d3.chordDirected().padAngle(0.08).sortSubgroups(d3.descending)(matrix);
+      .range([
+        "#7ac7ff",
+        "#7bf0b4",
+        "#ffc86a",
+        "#df91ff",
+        "#ff8e72",
+        "#9fe870",
+        "#f6b5d8"
+      ]);
+
+    const chord = d3.chordDirected().padAngle(0.05).sortSubgroups(d3.descending)(matrix);
     const root = svg
       .attr("viewBox", `0 0 ${width} ${height}`)
       .append("g")
@@ -51,7 +71,7 @@ export function ChordPanel({
       .join("path")
       .attr("d", d3.arc().innerRadius(innerRadius).outerRadius(outerRadius) as never)
       .attr("fill", (group) => color(ports[group.index]))
-      .attr("stroke", "#09131f");
+      .attr("stroke", "rgba(8, 21, 33, 0.95)");
 
     root
       .append("g")
@@ -60,71 +80,101 @@ export function ChordPanel({
       .join("text")
       .attr("transform", (group) => {
         const angle = (group.startAngle + group.endAngle) / 2 - Math.PI / 2;
-        const x = Math.cos(angle) * (outerRadius + 12);
-        const y = Math.sin(angle) * (outerRadius + 12);
+        const x = Math.cos(angle) * (outerRadius + 20);
+        const y = Math.sin(angle) * (outerRadius + 20);
         return `translate(${x},${y})`;
       })
-      .attr("text-anchor", "middle")
+      .attr("text-anchor", (group) => {
+        const angle = (group.startAngle + group.endAngle) / 2 - Math.PI / 2;
+        return Math.cos(angle) >= 0 ? "start" : "end";
+      })
+      .attr("dominant-baseline", "middle")
       .attr("fill", "#d9f2ff")
       .attr("font-size", 11)
+      .attr("font-weight", 600)
       .text((group) => ports[group.index]);
 
     root
       .append("g")
-      .attr("fill-opacity", 0.72)
       .selectAll("path")
       .data(chord)
       .join("path")
-      .attr(
-        "d",
-        d3.ribbonArrow().radius(innerRadius - 1).padAngle(0.02) as never
-      )
+      .attr("d", d3.ribbonArrow().radius(innerRadius - 1).padAngle(0.02) as never)
       .attr("fill", (entry) => color(ports[entry.source.index]))
-      .attr("stroke", "rgba(255,255,255,0.08)")
-      .style("cursor", "pointer")
-      .classed("chord-active", (entry) => {
+      .attr("stroke", (entry) => {
         const source = ports[entry.source.index];
         const target = ports[entry.target.index];
-        return (
-          selectedPortPair?.[0] === source && selectedPortPair?.[1] === target
-        );
+        return selectedPortPair?.[0] === source && selectedPortPair?.[1] === target
+          ? "#ffffff"
+          : "rgba(255,255,255,0.12)";
       })
+      .attr("stroke-width", (entry) => {
+        const source = ports[entry.source.index];
+        const target = ports[entry.target.index];
+        return selectedPortPair?.[0] === source && selectedPortPair?.[1] === target ? 2.5 : 1;
+      })
+      .attr("opacity", (entry) => {
+        if (!selectedPortPair) return 0.84;
+        const source = ports[entry.source.index];
+        const target = ports[entry.target.index];
+        return selectedPortPair[0] === source && selectedPortPair[1] === target ? 1 : 0.68;
+      })
+      .style("cursor", "pointer")
       .on("click", (_, entry) => {
         const source = ports[entry.source.index];
         const target = ports[entry.target.index];
-        const flow = flows.find(
-          (item) => item.source === source && item.target === target
-        );
-        if (flow) onSelect(flow);
+        const flow = flows.find((item) => item.source === source && item.target === target);
+        if (flow) {
+          onSelect(flow);
+        }
       })
       .append("title")
       .text((entry) => {
         const source = ports[entry.source.index];
         const target = ports[entry.target.index];
         const value = matrix[entry.source.index][entry.target.index];
-        return `${source} → ${target}: ${value}`;
+        return `${source} -> ${target}: ${value}`;
       });
-  }, [flows, onSelect, selectedPortPair]);
+  }, [flows, onSelect, ports, selectedPortPair]);
 
   const activeFlow =
     selectedPortPair &&
     flows.find(
-      (flow) =>
-        flow.source === selectedPortPair[0] && flow.target === selectedPortPair[1]
+      (flow) => flow.source === selectedPortPair[0] && flow.target === selectedPortPair[1]
     );
+
+  const totalVoyages = flows.reduce((sum, flow) => sum + flow.value, 0);
 
   return (
     <div className="panel">
       <div className="panel-header">
-        <h3>港口流向弦图</h3>
-        <p>宏观流向 → 航次 drill-down</p>
+        <div>
+          <h3>港口流向弦图</h3>
+          <p>
+            当前显示全部港口和全部流向。点击某一条流时，只高亮该流并显示解释。
+          </p>
+        </div>
+      </div>
+      <div className="flow-network-summary">
+        <div className="flow-network-meta">
+          <strong>{ports.length} 个港口</strong>
+          <span>{flows.length} 条流向</span>
+          <span>{totalVoyages} 条航次</span>
+        </div>
+        <div className="flow-port-list">
+          {ports.map((port) => (
+            <span key={port} className="flow-port-chip">
+              {port}
+            </span>
+          ))}
+        </div>
       </div>
       <svg ref={svgRef} className="chord-svg" />
       {activeFlow ? (
         <div className="chord-caption">
           <div className="caption-row">
             <strong>
-              {activeFlow.source} → {activeFlow.target}
+              {activeFlow.source} -&gt; {activeFlow.target}
             </strong>
             <Badge sourceType={activeFlow.sourceType} />
           </div>

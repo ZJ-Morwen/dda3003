@@ -21,34 +21,54 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-function toRange(timeFilter: TimeFilter): { startDate: string; endDate: string } {
+function toRange(timeFilter: TimeFilter): { startTs: string; endTs: string } {
   return {
-    startDate: timeFilter.startDay,
-    endDate: timeFilter.endDay ?? timeFilter.startDay
+    startTs: timeFilter.startTs,
+    endTs: timeFilter.endTs ?? timeFilter.startTs
   };
+}
+
+function withOptionalRange(
+  query: URLSearchParams,
+  timeFilter?: TimeFilter
+): URLSearchParams {
+  if (!timeFilter) {
+    return query;
+  }
+  const range = toRange(timeFilter);
+  query.set("startTs", range.startTs);
+  query.set("endTs", range.endTs);
+  return query;
 }
 
 export async function getDashboardSnapshot(startDate?: string, endDate?: string): Promise<DashboardSnapshot> {
   const query = new URLSearchParams();
-  if (startDate) query.set("startDate", startDate);
-  if (endDate) query.set("endDate", endDate);
+  if (startDate) query.set("startTs", startDate);
+  if (endDate) query.set("endTs", endDate);
   return fetchJson<DashboardSnapshot>(`/api/dashboard/snapshot?${query.toString()}`);
 }
 
-export async function getRoute(voyageId: string, timeFilter: TimeFilter, ts?: string): Promise<RouteGeometryPayload> {
-  const range = toRange(timeFilter);
-  const query = new URLSearchParams(range);
-  if (ts) query.set("ts", ts);
+export async function getRoute(
+  voyageId: string,
+  options?: { timeFilter?: TimeFilter; ts?: string }
+): Promise<RouteGeometryPayload> {
+  const query = withOptionalRange(new URLSearchParams(), options?.timeFilter);
+  if (options?.ts) {
+    query.set("ts", options.ts);
+  }
   return fetchJson<RouteGeometryPayload>(`/api/voyages/${voyageId}/route?${query.toString()}`);
 }
 
-export async function getEmissionSeries(voyageId: string, timeFilter: TimeFilter): Promise<{ voyageId: string; sourceType: "real" | "mock" | "derived"; points: EmissionSeriesPoint[] }> {
-  const query = new URLSearchParams(toRange(timeFilter));
+export async function getEmissionSeries(
+  voyageId: string,
+  timeFilter?: TimeFilter
+): Promise<{ voyageId: string; sourceType: "real" | "mock" | "derived"; points: EmissionSeriesPoint[] }> {
+  const query = withOptionalRange(new URLSearchParams(), timeFilter);
   return fetchJson(`/api/voyages/${voyageId}/emission-series?${query.toString()}`);
 }
 
-export async function getMetrics(voyageId: string, timeFilter: TimeFilter): Promise<RouteMetrics> {
-  const query = new URLSearchParams(toRange(timeFilter));
+export async function getMetrics(voyageId: string, timeFilter?: TimeFilter): Promise<RouteMetrics> {
+  const query = withOptionalRange(new URLSearchParams(), timeFilter);
   return fetchJson(`/api/voyages/${voyageId}/metrics?${query.toString()}`);
 }
 

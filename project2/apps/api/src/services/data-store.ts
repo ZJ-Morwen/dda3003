@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type {
@@ -30,12 +30,12 @@ import type {
   RealDataset
 } from "../lib/internal-types.js";
 import { round } from "../lib/stats.js";
-import { buildTimeFilter, dayInRange, ensureTimeFilter, normalizeDateInput, slidingWindowDays } from "../lib/time.js";
+import { buildTimeFilter, ensureTimeFilter, normalizeTimeInput, slidingWindowDays, timestampInRange } from "../lib/time.js";
 
 const ENVIRONMENT_LAYER_LABELS: Record<"wind" | "current" | "wave", string> = {
-  wind: "风场",
-  current: "洋流",
-  wave: "波浪"
+  wind: "Wind",
+  current: "Current",
+  wave: "Wave"
 };
 
 function resolveProjectRoot(): string {
@@ -57,6 +57,12 @@ const GENERATED_DATA_PATH = path.resolve(
   "data",
   "generated",
   "real-data.json"
+);
+const GENERATED_VOYAGES_DIR = path.resolve(
+  PROJECT_ROOT,
+  "data",
+  "generated",
+  "voyages"
 );
 const MOCK_VOYAGES_PATH = path.resolve(
   PROJECT_ROOT,
@@ -84,6 +90,16 @@ const CHECK_ANIMATION_PATH = path.resolve(
 );
 
 let datasetPromise: Promise<CompositeDataset> | null = null;
+let datasetVersion = "";
+
+function getDatasetTimeRange(real: RealDataset): { startTs: string; endTs: string } {
+  return (
+    real.meta.timeRange ?? {
+      startTs: `${real.meta.dateRange.start}T00:00:00.000Z`,
+      endTs: `${real.meta.dateRange.end}T23:59:59.999Z`
+    }
+  );
+}
 
 async function ensureDiagnosticsFile(): Promise<void> {
   await mkdir(path.dirname(CHECK_ANIMATION_PATH), { recursive: true });
@@ -108,18 +124,59 @@ async function loadDataset(): Promise<CompositeDataset> {
 }
 
 async function getDataset(): Promise<CompositeDataset> {
-  if (!datasetPromise) {
+  const nextVersion = `${(await stat(GENERATED_DATA_PATH)).mtimeMs}`;
+  if (!datasetPromise || datasetVersion !== nextVersion) {
+    datasetVersion = nextVersion;
     datasetPromise = loadDataset();
   }
   return datasetPromise;
 }
 
 function getSlice(series: EmissionSeriesPoint[], timeFilter: TimeFilter): EmissionSeriesPoint[] {
-  const { startDay, endDay } = ensureTimeFilter(timeFilter);
-  return series.filter((point) => dayInRange(point.day, startDay, endDay));
+  const { startTs, endTs } = ensureTimeFilter(timeFilter);
+  return series.filter((point) => timestampInRange(point.ts, startTs, endTs));
+}
+
+function voyageIntersectsTimeFilter(voyage: DatasetVoyage, timeFilter: TimeFilter): boolean {
+  const { startTs, endTs } = ensureTimeFilter(timeFilter);
+  return (
+    timestampInRange(voyage.startTs, startTs, endTs) ||
+    timestampInRange(voyage.endTs, startTs, endTs) ||
+    (voyage.startTs <= startTs && voyage.endTs >= endTs)
+  );
+}
+
+async function loadRealVoyageDetail(voyageId: string): Promise<DatasetVoyage | null> {
+  const filePath = path.resolve(GENERATED_VOYAGES_DIR, `${voyageId}.json`);
+  try {
+    return await readJsonFile<DatasetVoyage>(filePath);
+  } catch {
+    return null;
+  }
 }
 
 function summaryFromVoyage(voyage: DatasetVoyage, timeFilter: TimeFilter): VoyageSummary | null {
+  if (!voyageIntersectsTimeFilter(voyage, timeFilter)) {
+    return null;
+  }
+  if (!voyage.series) {
+    return {
+      voyageId: voyage.voyageId,
+      voyageIndex: voyage.voyageIndex,
+      label: voyage.label,
+      sourceType: voyage.sourceType,
+      origin: voyage.origin,
+      destination: voyage.destination,
+      vesselId: voyage.vesselId,
+      startTs: voyage.startTs,
+      endTs: voyage.endTs,
+      startDay: voyage.startDay,
+      endDay: voyage.endDay,
+      availableDays: voyage.availableDays,
+      emissionUnit: voyage.emissionUnit,
+      metrics: voyage.metrics
+    };
+  }
   const slice = getSlice(voyage.series, timeFilter);
   if (slice.length === 0) {
     return null;
@@ -176,7 +233,14 @@ function buildScatter(voyages: DatasetVoyage[], timeFilter: TimeFilter): Scatter
     .map((summary, index) => ({
       voyageId: summary.voyageId,
       voyageIndex: index + 1,
+      startTs: summary.startTs,
+      endTs: summary.endTs,
+      origin: summary.origin,
+      destination: summary.destination,
+      distanceNm: summary.metrics.distanceNm,
+      avgSpeed: summary.metrics.avgSpeed,
       totalEmission: summary.metrics.totalEmission,
+      emissionPerNm: summary.metrics.emissionPerNm,
       emissionUnit: summary.emissionUnit,
       label: summary.label,
       sourceType: summary.sourceType
@@ -204,76 +268,69 @@ function seededWeights(startDay: string, endDay: string): EnvironmentWeightsPayl
       wave: round(safe.wave / total, 3)
     },
     normalized: true,
-    computedAt: `${endDay}T12:00:00+08:00`,
+    computedAt: endDay,
     sourceType: "mock"
   };
 }
 
 function buildPortFlows(dataset: CompositeDataset, timeFilter: TimeFilter): PortFlow[] {
-  const realVoyages = dataset.real.voyages
-    .filter((voyage) => getSlice(voyage.series, timeFilter).length > 0)
-    .map((voyage) => voyage.voyageId);
-  return dataset.portFlowSeeds.map((seed) => {
-    if (seed.source === "Tianjin" && seed.target === "Qingdao") {
-      return {
-        source: seed.source,
-        target: seed.target,
-        value: realVoyages.length,
-        sourceType: "real",
-        description: "真实天津-青岛 AIS 航次流向统计。",
-        voyageIds: realVoyages
-      };
+  const grouped = new Map<string, PortFlow>();
+  for (const voyage of dataset.real.voyages) {
+    if (!voyageIntersectsTimeFilter(voyage, timeFilter)) {
+      continue;
     }
-    const mockVoyages = dataset.mockVoyages
-      .filter(
-        (voyage) =>
-          voyage.origin === seed.source &&
-          voyage.destination === seed.target &&
-          getSlice(voyage.series, timeFilter).length > 0
-      )
-      .map((voyage) => voyage.voyageId);
-    return {
-      source: seed.source,
-      target: seed.target,
-      value: seed.value,
-      sourceType: "mock",
-      description: seed.description,
-      voyageIds: mockVoyages
+    const key = `${voyage.origin}-->${voyage.destination}`;
+    const existing = grouped.get(key) ?? {
+      source: voyage.origin,
+      target: voyage.destination,
+      value: 0,
+      sourceType: "real" as const,
+      description: `Real AIS voyages from ${voyage.origin} to ${voyage.destination}.`,
+      voyageIds: []
     };
-  });
+    existing.value += 1;
+    existing.voyageIds.push(voyage.voyageId);
+    grouped.set(key, existing);
+  }
+  return [...grouped.values()].sort((left, right) => right.value - left.value);
 }
 
 function buildDataDescription(dataset: CompositeDataset, timeFilter: TimeFilter): DataDescriptionCard[] {
-  const range = ensureTimeFilter(timeFilter);
+  const uniqueRoutes = new Set(
+    dataset.real.voyages.map((voyage) => `${voyage.origin}-${voyage.destination}`)
+  ).size;
   return [
     {
-      title: "AIS 原始点位",
+      title: "AIS Raw Points",
       value: dataset.real.meta.rawSummary.rawPointCount.toLocaleString("zh-CN"),
-      detail: `原始数据覆盖 ${dataset.real.meta.rawSummary.rawDateRange.start} 至 ${dataset.real.meta.rawSummary.rawDateRange.end}。`,
+      detail: `Covers ${dataset.real.meta.rawSummary.rawDateRange.start} to ${dataset.real.meta.rawSummary.rawDateRange.end}.`,
       sourceType: "real"
     },
     {
-      title: "清洗后航次",
+      title: "Real Voyages",
       value: dataset.real.meta.rawSummary.voyageCount.toString(),
-      detail: `真实主链路使用天津-青岛 ${dataset.real.meta.rawSummary.voyageCount} 个有效航次。`,
+      detail: `${dataset.real.meta.rawSummary.voyageCount} voyages across ${uniqueRoutes} real port pairs from cleaned_ais_data.`,
       sourceType: "real"
     },
     {
-      title: "标准航线模型",
-      value: "中位速度剖面",
-      detail: `基于真实航次速度分布推导标准参考线，当前时间窗 ${range.startDay} 至 ${range.endDay}。`,
+      title: "Reference Route Model",
+      value: "Median speed profile",
+      detail: "Derived from real voyages grouped by origin and destination ports.",
       sourceType: "derived"
     },
     {
-      title: "环境与多港流向",
-      value: "模拟补齐",
-      detail: "风场、洋流、波浪与非天津-青岛港口对使用独立 mock 数据目录生成。",
+      title: "Environment Layers",
+      value: "Mock assisted",
+      detail: "Wind, current, and wave layers remain synthetic support layers for visualization.",
       sourceType: "mock"
     }
   ];
 }
 
 function buildRouteMetricsFromSlice(voyage: DatasetVoyage, timeFilter: TimeFilter): RouteMetrics | null {
+  if (!voyage.series) {
+    return null;
+  }
   const slice = getSlice(voyage.series, timeFilter);
   if (slice.length === 0) {
     return null;
@@ -300,42 +357,42 @@ function buildRouteMetricsFromSlice(voyage: DatasetVoyage, timeFilter: TimeFilte
   const items = [
     {
       metric: "durationHours",
-      label: "总航行时间",
-      unit: "小时",
+      label: "Duration",
+      unit: "h",
       actual: round(durationHours, 3),
       standard: round(standardDuration, 3)
     },
     {
       metric: "distanceNm",
-      label: "总距离",
-      unit: "海里",
+      label: "Distance",
+      unit: "NM",
       actual: round(actualDistance, 3),
       standard: round(standardDistance, 3)
     },
     {
       metric: "avgSpeed",
-      label: "平均速度",
-      unit: "节",
+      label: "Average speed",
+      unit: "kt",
       actual: round(durationHours > 0 ? actualDistance / durationHours : 0, 3),
       standard: round(standardDuration > 0 ? standardDistance / standardDuration : 0, 3)
     },
     {
       metric: "maxSpeed",
-      label: "最大速度",
-      unit: "节",
+      label: "Max speed",
+      unit: "kt",
       actual: round(Math.max(...slice.map((point) => point.actualSpeed)), 3),
       standard: round(Math.max(...slice.map((point) => point.standardSpeed)), 3)
     },
     {
       metric: "totalEmission",
-      label: "总碳排放分数",
+      label: "Total emission score",
       unit: "score",
       actual: round(actualTotalEmission, 3),
       standard: round(standardTotalEmission, 3)
     },
     {
       metric: "emissionPerNm",
-      label: "单位距离排放",
+      label: "Emission per NM",
       unit: "score/NM",
       actual: round(actualTotalEmission / (actualDistance || 1), 3),
       standard: round(standardTotalEmission / (standardDistance || 1), 3)
@@ -357,6 +414,9 @@ function buildRouteMetricsFromSlice(voyage: DatasetVoyage, timeFilter: TimeFilte
 }
 
 function buildRouteGeometry(voyage: DatasetVoyage, timeFilter: TimeFilter, ts?: string): RouteGeometryPayload | null {
+  if (!voyage.series) {
+    return null;
+  }
   const slice = getSlice(voyage.series, timeFilter);
   if (slice.length === 0) {
     return null;
@@ -390,6 +450,14 @@ function findVoyageById(dataset: CompositeDataset, voyageId: string): DatasetVoy
   return [...dataset.real.voyages, ...dataset.mockVoyages].find((voyage) => voyage.voyageId === voyageId);
 }
 
+async function loadVoyageForDetail(dataset: CompositeDataset, voyageId: string): Promise<DatasetVoyage | undefined> {
+  const mockVoyage = dataset.mockVoyages.find((voyage) => voyage.voyageId === voyageId);
+  if (mockVoyage) {
+    return mockVoyage;
+  }
+  return (await loadRealVoyageDetail(voyageId)) ?? undefined;
+}
+
 export async function getMetaLatestDate(): Promise<MetaLatestDatePayload> {
   const dataset = await getDataset();
   return {
@@ -403,17 +471,18 @@ export async function getDashboardSnapshot(
   endDate?: string
 ): Promise<DashboardSnapshot> {
   const dataset = await getDataset();
-  const latest = dataset.real.meta.latestDate;
-  const startDay = normalizeDateInput(startDate, latest);
-  const endDay = normalizeDateInput(endDate, startDay);
-  const timeFilter = buildTimeFilter(startDay, endDay);
+  const { startTs: minTs, endTs: maxTs } = getDatasetTimeRange(dataset.real);
+  const startTs = normalizeTimeInput(startDate, minTs);
+  const endTs = normalizeTimeInput(endDate, maxTs);
+  const timeFilter = buildTimeFilter(startTs, endTs);
   const scatter = buildScatter(dataset.real.voyages, timeFilter);
   const latestVoyageId = scatter.length > 0 ? scatter[scatter.length - 1].voyageId : null;
   return {
-    anchorDate: latest,
+    anchorDate: dataset.real.meta.latestDate,
+    availableTimeRange: getDatasetTimeRange(dataset.real),
     timeFilter,
     scatter,
-    weights: seededWeights(startDay, endDay),
+    weights: seededWeights(startTs, endTs),
     portFlows: buildPortFlows(dataset, timeFilter),
     dataDescription: buildDataDescription(dataset, timeFilter),
     latestVoyageId
@@ -422,9 +491,9 @@ export async function getDashboardSnapshot(
 
 export async function getScatter(startDate?: string, endDate?: string): Promise<{ items: ScatterItem[]; startDate: string; endDate: string }> {
   const dataset = await getDataset();
-  const latest = dataset.real.meta.latestDate;
-  const startDay = normalizeDateInput(startDate, latest);
-  const endDay = normalizeDateInput(endDate, startDay);
+  const { startTs: minTs, endTs: maxTs } = getDatasetTimeRange(dataset.real);
+  const startDay = normalizeTimeInput(startDate, minTs);
+  const endDay = normalizeTimeInput(endDate, maxTs);
   return {
     items: buildScatter(dataset.real.voyages, buildTimeFilter(startDay, endDay)),
     startDate: startDay,
@@ -434,9 +503,9 @@ export async function getScatter(startDate?: string, endDate?: string): Promise<
 
 export async function getPortFlows(startDate?: string, endDate?: string): Promise<{ items: PortFlow[]; startDate: string; endDate: string }> {
   const dataset = await getDataset();
-  const latest = dataset.real.meta.latestDate;
-  const startDay = normalizeDateInput(startDate, latest);
-  const endDay = normalizeDateInput(endDate, startDay);
+  const { startTs: minTs, endTs: maxTs } = getDatasetTimeRange(dataset.real);
+  const startDay = normalizeTimeInput(startDate, minTs);
+  const endDay = normalizeTimeInput(endDate, maxTs);
   return {
     items: buildPortFlows(dataset, buildTimeFilter(startDay, endDay)),
     startDate: startDay,
@@ -451,11 +520,9 @@ export async function getPortFlowVoyages(
   endDate?: string
 ): Promise<{ source: string; target: string; items: VoyageSummary[] }> {
   const dataset = await getDataset();
-  const latest = dataset.real.meta.latestDate;
-  const timeFilter = buildTimeFilter(normalizeDateInput(startDate, latest), normalizeDateInput(endDate, startDate ?? latest));
-  const pool =
-    source === "Tianjin" && target === "Qingdao" ? dataset.real.voyages : dataset.mockVoyages;
-  const items = pool
+  const { startTs: minTs, endTs: maxTs } = getDatasetTimeRange(dataset.real);
+  const timeFilter = buildTimeFilter(normalizeTimeInput(startDate, minTs), normalizeTimeInput(endDate, maxTs));
+  const items = dataset.real.voyages
     .filter((voyage) => voyage.origin === source && voyage.destination === target)
     .map((voyage) => summaryFromVoyage(voyage, timeFilter))
     .filter((voyage): voyage is VoyageSummary => Boolean(voyage));
@@ -469,12 +536,12 @@ export async function getVoyageRoute(
   ts?: string
 ): Promise<RouteGeometryPayload | null> {
   const dataset = await getDataset();
-  const voyage = findVoyageById(dataset, voyageId);
+  const voyage = await loadVoyageForDetail(dataset, voyageId);
   if (!voyage) {
     return null;
   }
-  const latest = dataset.real.meta.latestDate;
-  const timeFilter = buildTimeFilter(normalizeDateInput(startDate, latest), normalizeDateInput(endDate, startDate ?? latest));
+  const { startTs: minTs, endTs: maxTs } = getDatasetTimeRange(dataset.real);
+  const timeFilter = buildTimeFilter(normalizeTimeInput(startDate, minTs), normalizeTimeInput(endDate, maxTs));
   return buildRouteGeometry(voyage, timeFilter, ts);
 }
 
@@ -484,12 +551,15 @@ export async function getVoyageEmissionSeries(
   endDate?: string
 ): Promise<{ voyageId: string; sourceType: DatasetVoyage["sourceType"]; points: EmissionSeriesPoint[] } | null> {
   const dataset = await getDataset();
-  const voyage = findVoyageById(dataset, voyageId);
+  const voyage = await loadVoyageForDetail(dataset, voyageId);
   if (!voyage) {
     return null;
   }
-  const latest = dataset.real.meta.latestDate;
-  const timeFilter = buildTimeFilter(normalizeDateInput(startDate, latest), normalizeDateInput(endDate, startDate ?? latest));
+  const { startTs: minTs, endTs: maxTs } = getDatasetTimeRange(dataset.real);
+  const timeFilter = buildTimeFilter(normalizeTimeInput(startDate, minTs), normalizeTimeInput(endDate, maxTs));
+  if (!voyage.series) {
+    return null;
+  }
   return {
     voyageId,
     sourceType: voyage.sourceType,
@@ -503,12 +573,12 @@ export async function getVoyageMetrics(
   endDate?: string
 ): Promise<RouteMetrics | null> {
   const dataset = await getDataset();
-  const voyage = findVoyageById(dataset, voyageId);
+  const voyage = await loadVoyageForDetail(dataset, voyageId);
   if (!voyage) {
     return null;
   }
-  const latest = dataset.real.meta.latestDate;
-  const timeFilter = buildTimeFilter(normalizeDateInput(startDate, latest), normalizeDateInput(endDate, startDate ?? latest));
+  const { startTs: minTs, endTs: maxTs } = getDatasetTimeRange(dataset.real);
+  const timeFilter = buildTimeFilter(normalizeTimeInput(startDate, minTs), normalizeTimeInput(endDate, maxTs));
   return buildRouteMetricsFromSlice(voyage, timeFilter);
 }
 
@@ -517,9 +587,9 @@ export async function getEnvironmentWeights(
   endDate?: string
 ): Promise<EnvironmentWeightsPayloadInternal> {
   const dataset = await getDataset();
-  const latest = dataset.real.meta.latestDate;
-  const startDay = normalizeDateInput(startDate, latest);
-  const endDay = normalizeDateInput(endDate, startDay);
+  const { startTs: minTs, endTs: maxTs } = getDatasetTimeRange(dataset.real);
+  const startDay = normalizeTimeInput(startDate, minTs);
+  const endDay = normalizeTimeInput(endDate, maxTs);
   return seededWeights(startDay, endDay);
 }
 

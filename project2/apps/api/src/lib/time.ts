@@ -4,32 +4,35 @@ export function isoToDay(iso: string): string {
   return iso.slice(0, 10);
 }
 
-export function ensureTimeFilter(timeFilter: TimeFilter): { startDay: string; endDay: string } {
+export function ensureTimeFilter(timeFilter: TimeFilter): { startTs: string; endTs: string } {
   return {
-    startDay: timeFilter.startDay,
-    endDay: timeFilter.endDay ?? timeFilter.startDay
+    startTs: timeFilter.startTs,
+    endTs: timeFilter.endTs ?? timeFilter.startTs
   };
 }
 
-export function normalizeDateInput(value: string | undefined, fallback?: string): string {
-  if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return value;
+export function normalizeTimeInput(value: string | undefined, fallback?: string): string {
+  if (value) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString();
+    }
   }
   if (fallback) {
     return fallback;
   }
-  throw new Error("Invalid date input");
+  throw new Error("Invalid time input");
 }
 
-export function dayInRange(day: string, startDay: string, endDay: string): boolean {
-  return day >= startDay && day <= endDay;
+export function timestampInRange(ts: string, startTs: string, endTs: string): boolean {
+  return ts >= startTs && ts <= endTs;
 }
 
-export function buildTimeFilter(startDay: string, endDay?: string): TimeFilter {
-  if (!endDay || endDay === startDay) {
-    return { mode: "single_day", startDay };
+export function buildTimeFilter(startTs: string, endTs?: string): TimeFilter {
+  if (!endTs || endTs === startTs) {
+    return { mode: "instant", startTs };
   }
-  return { mode: "range", startDay, endDay };
+  return { mode: "range", startTs, endTs };
 }
 
 export function slidingWindowDays(anchorDate: string, count: number): string[] {

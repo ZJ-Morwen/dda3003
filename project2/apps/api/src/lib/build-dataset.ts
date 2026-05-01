@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "csv-parse";
 
@@ -18,22 +18,27 @@ import { isoToDay } from "./time.js";
 
 interface CleanRow {
   mmsi: string;
-  lon: string;
-  lat: string;
-  sog: string;
-  hdg: string;
-  cog: string;
-  ts: string;
-  voyage_uuid: string;
-  route_line: string;
-}
-
-interface RawRow {
-  mmsi: string;
-  postime: string;
+  lon?: string;
+  lat?: string;
+  sog?: string;
+  hdg?: string;
+  cog?: string;
+  ts?: string;
+  voyage_uuid?: string;
+  route_line?: string;
+  timestamp?: string;
+  timestamp_new?: string;
+  latitude?: string;
+  longitude?: string;
+  speed?: string;
+  course?: string;
+  heading?: string;
+  routeId?: string;
+  vesselName?: string;
 }
 
 interface TrackPointInput {
+  sequence?: number;
   ts: string;
   lat: number;
   lon: number;
@@ -55,20 +60,377 @@ interface BuildVoyageInput {
   referenceSpeedProfile?: number[];
 }
 
+interface WeightedEdge {
+  to: number;
+  weight: number;
+}
+
+interface HeapEntry {
+  index: number;
+  distance: number;
+}
+
+interface CleanedCsvFile {
+  filePath: string;
+  fileKey: string;
+}
+
+const OBSERVED_PORT_CENTERS = {
+  Tianjin: { lat: 39.45, lon: 119.32 },
+  Qingdao: { lat: 36.01, lon: 120.47 },
+  Ningbo: { lat: 29.98, lon: 122.52 },
+  Shanghai: { lat: 31.28, lon: 122.02 },
+  Shenzhen: { lat: 22.43, lon: 114.60 },
+  Guangzhou: { lat: 21.96, lon: 113.85 }
+} satisfies Record<string, { lat: number; lon: number }>;
+
 function toIsoShanghai(date: Date): string {
   const shifted = new Date(date.getTime() + 8 * 60 * 60 * 1000);
   return `${shifted.toISOString().slice(0, 19)}+08:00`;
 }
 
-function parseRawTimestamp(input: string): string {
-  const match = input.match(
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})\+(\d{2})$/
-  );
-  if (!match) {
-    return input;
+function normalizePortSlug(input: string): string {
+  const normalized = input.trim().toLowerCase();
+  return normalized === "qingdado" ? "qingdao" : normalized;
+}
+
+function parseRouteFromFilename(fileName: string): {
+  fileKey: string;
+} {
+  const baseName = path.basename(fileName, path.extname(fileName));
+  const slugs = baseName.split("_");
+  if (slugs.length < 2) {
+    throw new Error(`Unable to parse route from file name: ${fileName}`);
   }
-  const [, day, month, year, hour, minute, second, offset] = match;
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hour}:${minute}:${second}+${offset}:00`;
+  return {
+    fileKey: slugs.map((slug) => normalizePortSlug(slug)).join("-")
+  };
+}
+
+function parseFlexibleTimestamp(input: string): string {
+  const value = input.trim();
+  if (!value) {
+    return value;
+  }
+  if (value.includes("T")) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toISOString();
+  }
+  const parts =
+    value.match(
+      /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/
+    ) ??
+    value.match(
+      /^(\d{4})-(\d{1,2})-(\d{1,2})T(\d{1,2}):(\d{2})(?::(\d{2}))?$/
+    );
+  const pad = (raw: string) => raw.padStart(2, "0");
+  const withZone = parts
+    ? `${parts[1]}-${pad(parts[2])}-${pad(parts[3])}T${pad(parts[4])}:${pad(parts[5])}:${pad(parts[6] ?? "00")}+08:00`
+    : /(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+      ? value
+      : `${value.replace(/\//g, "-").replace(" ", "T")}+08:00`;
+  const date = new Date(withZone);
+  return Number.isNaN(date.getTime()) ? withZone : date.toISOString();
+}
+
+function inferPortLabel(lat: number, lon: number): string {
+  const candidates = Object.entries(OBSERVED_PORT_CENTERS).map(([name, center]) => ({
+    name,
+    distance: haversineNm(lat, lon, center.lat, center.lon)
+  }));
+  candidates.sort((left, right) => left.distance - right.distance);
+  return candidates[0]?.name ?? "Unknown";
+}
+
+function majorityLabel(labels: string[]): string {
+  const counts = new Map<string, number>();
+  for (const label of labels) {
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0] ?? "Unknown";
+}
+
+function inferPortPairFromTrack(
+  track: TrackPointInput[],
+  fallback?: { origin: string; destination: string }
+): { origin: string; destination: string } {
+  if (track.length === 0) {
+    return fallback ?? { origin: "Unknown", destination: "Unknown" };
+  }
+
+  const origin = inferPortLabel(track[0].lat, track[0].lon);
+  const destination = inferPortLabel(track[track.length - 1].lat, track[track.length - 1].lon);
+
+  if (origin !== destination) {
+    return { origin, destination };
+  }
+
+  if (fallback && fallback.origin !== fallback.destination) {
+    return fallback;
+  }
+
+  return { origin, destination };
+}
+
+function findNearestPointIndex(
+  track: TrackPointInput[],
+  center: { lat: number; lon: number }
+): number {
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < track.length; index += 1) {
+    const point = track[index];
+    const distance = haversineNm(point.lat, point.lon, center.lat, center.lon);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  }
+  return bestIndex;
+}
+
+function trackDistanceNm(track: TrackPointInput[]): number {
+  let total = 0;
+  for (let index = 1; index < track.length; index += 1) {
+    const previous = track[index - 1];
+    const current = track[index];
+    total += haversineNm(previous.lat, previous.lon, current.lat, current.lon);
+  }
+  return total;
+}
+
+class MinHeap {
+  private readonly items: HeapEntry[] = [];
+
+  push(entry: HeapEntry): void {
+    this.items.push(entry);
+    this.bubbleUp(this.items.length - 1);
+  }
+
+  pop(): HeapEntry | undefined {
+    if (this.items.length === 0) {
+      return undefined;
+    }
+    const top = this.items[0];
+    const tail = this.items.pop()!;
+    if (this.items.length > 0) {
+      this.items[0] = tail;
+      this.bubbleDown(0);
+    }
+    return top;
+  }
+
+  get size(): number {
+    return this.items.length;
+  }
+
+  private bubbleUp(startIndex: number): void {
+    let index = startIndex;
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      if (this.items[parentIndex].distance <= this.items[index].distance) {
+        break;
+      }
+      [this.items[parentIndex], this.items[index]] = [this.items[index], this.items[parentIndex]];
+      index = parentIndex;
+    }
+  }
+
+  private bubbleDown(startIndex: number): void {
+    let index = startIndex;
+    const lastIndex = this.items.length - 1;
+    while (true) {
+      const leftIndex = index * 2 + 1;
+      const rightIndex = index * 2 + 2;
+      let smallest = index;
+      if (
+        leftIndex <= lastIndex &&
+        this.items[leftIndex].distance < this.items[smallest].distance
+      ) {
+        smallest = leftIndex;
+      }
+      if (
+        rightIndex <= lastIndex &&
+        this.items[rightIndex].distance < this.items[smallest].distance
+      ) {
+        smallest = rightIndex;
+      }
+      if (smallest === index) {
+        break;
+      }
+      [this.items[smallest], this.items[index]] = [this.items[index], this.items[smallest]];
+      index = smallest;
+    }
+  }
+}
+
+function rebuildTrackBySpatialContinuity(
+  track: TrackPointInput[],
+  origin: string,
+  destination: string
+): TrackPointInput[] {
+  const originCenter = OBSERVED_PORT_CENTERS[origin as keyof typeof OBSERVED_PORT_CENTERS];
+  const destinationCenter =
+    OBSERVED_PORT_CENTERS[destination as keyof typeof OBSERVED_PORT_CENTERS];
+  if (!originCenter || !destinationCenter || track.length < 3) {
+    return track;
+  }
+
+  const cellSizeNm = 5;
+  const maxRing = 20;
+  const neighborCount = 16;
+  const meanLat = average(track.map((point) => point.lat));
+  const lonScale = 60 * Math.cos((meanLat * Math.PI) / 180);
+  const projected = track.map((point, index) => ({
+    index,
+    x: point.lon * lonScale,
+    y: point.lat * 60
+  }));
+  const grid = new Map<string, number[]>();
+  const cellKey = (cellX: number, cellY: number) => `${cellX},${cellY}`;
+
+  projected.forEach((point) => {
+    const cellX = Math.floor(point.x / cellSizeNm);
+    const cellY = Math.floor(point.y / cellSizeNm);
+    const key = cellKey(cellX, cellY);
+    const bucket = grid.get(key) ?? [];
+    bucket.push(point.index);
+    grid.set(key, bucket);
+  });
+
+  const adjacency = Array.from({ length: track.length }, () => [] as WeightedEdge[]);
+  projected.forEach((point) => {
+    const cellX = Math.floor(point.x / cellSizeNm);
+    const cellY = Math.floor(point.y / cellSizeNm);
+    const candidateSet = new Set<number>();
+    for (let dx = -maxRing; dx <= maxRing; dx += 1) {
+      for (let dy = -maxRing; dy <= maxRing; dy += 1) {
+        const bucket = grid.get(cellKey(cellX + dx, cellY + dy));
+        if (!bucket) {
+          continue;
+        }
+        bucket.forEach((candidate) => {
+          if (candidate !== point.index) {
+            candidateSet.add(candidate);
+          }
+        });
+      }
+    }
+
+    const nearest = [...candidateSet]
+      .sort((left, right) => {
+        const leftDx = projected[left].x - point.x;
+        const leftDy = projected[left].y - point.y;
+        const rightDx = projected[right].x - point.x;
+        const rightDy = projected[right].y - point.y;
+        return leftDx * leftDx + leftDy * leftDy - (rightDx * rightDx + rightDy * rightDy);
+      })
+      .slice(0, neighborCount);
+
+    nearest.forEach((otherIndex) => {
+      const weight = haversineNm(
+        track[point.index].lat,
+        track[point.index].lon,
+        track[otherIndex].lat,
+        track[otherIndex].lon
+      );
+      adjacency[point.index].push({ to: otherIndex, weight });
+      adjacency[otherIndex].push({ to: point.index, weight });
+    });
+  });
+
+  const startIndex = findNearestPointIndex(track, originCenter);
+  const endIndex = findNearestPointIndex(track, destinationCenter);
+  const distances = Array(track.length).fill(Number.POSITIVE_INFINITY);
+  const visited = Array(track.length).fill(false);
+  const heap = new MinHeap();
+  distances[startIndex] = 0;
+  heap.push({ index: startIndex, distance: 0 });
+
+  while (heap.size > 0) {
+    const current = heap.pop();
+    if (!current || visited[current.index]) {
+      continue;
+    }
+    visited[current.index] = true;
+    adjacency[current.index].forEach((edge) => {
+      const nextDistance = current.distance + edge.weight;
+      if (nextDistance < distances[edge.to]) {
+        distances[edge.to] = nextDistance;
+        heap.push({ index: edge.to, distance: nextDistance });
+      }
+    });
+  }
+
+  const unreachable: number[] = [];
+  const ordered = track
+    .map((point, index) => ({ point, index, distance: distances[index] }))
+    .filter((entry) => {
+      if (Number.isFinite(entry.distance)) {
+        return true;
+      }
+      unreachable.push(entry.index);
+      return false;
+    })
+    .sort((left, right) => left.distance - right.distance)
+    .map((entry) => entry.point);
+
+  if (unreachable.length > 0) {
+    const tail = unreachable
+      .map((index) => track[index])
+      .sort(
+        (left, right) =>
+          haversineNm(left.lat, left.lon, destinationCenter.lat, destinationCenter.lon) -
+          haversineNm(right.lat, right.lon, destinationCenter.lat, destinationCenter.lon)
+      );
+    ordered.push(...tail);
+  }
+
+  const endDistance = distances[endIndex];
+  if (!Number.isFinite(endDistance) || ordered.length !== track.length) {
+    return track;
+  }
+
+  return ordered;
+}
+
+function normalizeTrackOrder(
+  track: TrackPointInput[],
+  origin: string,
+  destination: string
+): TrackPointInput[] {
+  const orderedBySequence = [...track]
+    .map((point, index) => ({ ...point, sequence: point.sequence ?? index }))
+    .sort((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0));
+
+  const originCenter = OBSERVED_PORT_CENTERS[origin as keyof typeof OBSERVED_PORT_CENTERS];
+  const destinationCenter =
+    OBSERVED_PORT_CENTERS[destination as keyof typeof OBSERVED_PORT_CENTERS];
+  if (!originCenter || !destinationCenter) {
+    return orderedBySequence;
+  }
+
+  const directDistance = haversineNm(
+    originCenter.lat,
+    originCenter.lon,
+    destinationCenter.lat,
+    destinationCenter.lon
+  );
+  const orderedDistance = trackDistanceNm(orderedBySequence);
+  if (orderedDistance <= directDistance * 2.5) {
+    return orderedBySequence;
+  }
+
+  const rebuilt = rebuildTrackBySpatialContinuity(orderedBySequence, origin, destination);
+  const rebuiltDistance = trackDistanceNm(rebuilt);
+  return rebuiltDistance < orderedDistance * 0.7 ? rebuilt : orderedBySequence;
+}
+
+function sortUniqueDays(points: { day: string }[]): string[] {
+  return [...new Set(points.map((point) => point.day))].sort((left, right) =>
+    left.localeCompare(right)
+  );
 }
 
 async function streamCsv<T>(
@@ -154,25 +516,24 @@ export function buildMedianProfile(tracks: TrackPointInput[][], bucketCount = 48
 }
 
 function buildReferenceRouteFromTrack(track: TrackPointInput[]): [number, number][] {
-  if (track.length < 3) {
-    return track.map((point) => [point.lon, point.lat]);
-  }
-  const first = track[0];
-  const last = track[track.length - 1];
-  return track.map((point, index) => {
-    const progress = index / (track.length - 1);
-    const straightLon = first.lon + (last.lon - first.lon) * progress;
-    const straightLat = first.lat + (last.lat - first.lat) * progress;
-    const blend = index === 0 || index === track.length - 1 ? 0 : 0.22;
-    return [
-      point.lon * (1 - blend) + straightLon * blend,
-      point.lat * (1 - blend) + straightLat * blend
-    ];
-  });
+  // When we do not have an explicit shipping corridor, use the real sea route
+  // itself as the reference geometry so the "ideal" line does not cut across land.
+  return track.map((point) => [point.lon, point.lat]);
 }
 
 function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
-  const track = [...input.track].sort((left, right) => left.ts.localeCompare(right.ts));
+  // Some cleaned AIS files contain routeId points that no longer follow a
+  // spatially continuous order. Rebuild the route before generating geometry,
+  // but keep timestamps themselves untouched for time-based metadata.
+  const track =
+    input.sourceType === "real"
+      ? normalizeTrackOrder(input.track, input.origin, input.destination).map((point, index) => ({
+          ...point,
+          sequence: index
+        }))
+      : [...input.track]
+          .map((point, index) => ({ ...point, sequence: point.sequence ?? index }))
+          .sort((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0));
   const actualRoute = track.map((point) => [point.lon, point.lat] as [number, number]);
   const referenceRoute =
     input.referenceRoute && input.referenceRoute.length > 1
@@ -194,7 +555,7 @@ function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
   }
   let cumulativeActualEmission = 0;
   let cumulativeStandardEmission = 0;
-  const series: EmissionSeriesPoint[] = track.map((point, index) => {
+  const fullSeries: EmissionSeriesPoint[] = track.map((point, index) => {
     const actualSegmentDistance =
       index === 0 ? 0 : actualDistances[index] - actualDistances[index - 1];
     const [refLon, refLat] = referencePoints[index];
@@ -221,14 +582,15 @@ function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
       sourceType: input.sourceType
     };
   });
-  const startDate = new Date(track[0].ts);
-  const endDate = new Date(track[track.length - 1].ts);
+  const chronologicalTrack = [...track].sort((left, right) => left.ts.localeCompare(right.ts));
+  const startDate = new Date(chronologicalTrack[0].ts);
+  const endDate = new Date(chronologicalTrack[chronologicalTrack.length - 1].ts);
   const durationHours =
     (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
   const maxSpeed = Math.max(...track.map((point) => point.speed), 0);
   const avgSpeed = durationHours > 0 ? actualTotalDistance / durationHours : average(track.map((point) => point.speed));
-  const totalEmission = series.reduce((sum, point) => sum + point.actualEmission, 0);
-  const availableDays = [...new Set(series.map((point) => point.day))];
+  const totalEmission = fullSeries.reduce((sum, point) => sum + point.actualEmission, 0);
+  const availableDays = sortUniqueDays(fullSeries);
   return {
     voyageId: input.voyageId,
     voyageIndex: input.voyageIndex,
@@ -237,8 +599,8 @@ function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
     origin: input.origin,
     destination: input.destination,
     vesselId: input.vesselId,
-    startTs: track[0].ts,
-    endTs: track[track.length - 1].ts,
+    startTs: chronologicalTrack[0].ts,
+    endTs: chronologicalTrack[chronologicalTrack.length - 1].ts,
     startDay: availableDays[0],
     endDay: availableDays[availableDays.length - 1],
     availableDays,
@@ -246,7 +608,7 @@ function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
     bounds: computeBounds(actualRoute),
     actualRoute,
     referenceRoute,
-    series,
+    series: fullSeries,
     metrics: {
       durationHours: round(durationHours, 3),
       distanceNm: round(actualTotalDistance, 3),
@@ -258,31 +620,26 @@ function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
   };
 }
 
-export async function buildRealDataset(
-  cleanCsvPath: string,
-  rawCsvPath: string
-): Promise<RealDataset> {
-  const rawVessels = new Set<string>();
-  const cleanedVessels = new Set<string>();
-  let rawFirst = "";
-  let rawLast = "";
-  let rawPointCount = 0;
-  await streamCsv<RawRow>(rawCsvPath, (row) => {
-    rawPointCount += 1;
-    rawVessels.add(row.mmsi);
-    const iso = parseRawTimestamp(row.postime);
-    if (!rawFirst || iso < rawFirst) {
-      rawFirst = iso;
-    }
-    if (!rawLast || iso > rawLast) {
-      rawLast = iso;
-    }
-  });
+export async function buildRealDataset(cleanedDataDir: string): Promise<RealDataset> {
+  const files = (await readdir(cleanedDataDir))
+    .filter((fileName) => fileName.toLowerCase().endsWith(".csv"))
+    .map((fileName) => ({
+      filePath: path.resolve(cleanedDataDir, fileName),
+      ...parseRouteFromFilename(fileName)
+    }))
+    .sort((left, right) => left.fileKey.localeCompare(right.fileKey)) satisfies CleanedCsvFile[];
 
+  if (files.length === 0) {
+    throw new Error(`No CSV files found in ${cleanedDataDir}`);
+  }
+
+  const cleanedVessels = new Set<string>();
   const voyageRows = new Map<
     string,
     {
       vesselId: string;
+      routeKey: string;
+      fileKey: string;
       routeLine: string;
       points: TrackPointInput[];
     }
@@ -290,59 +647,167 @@ export async function buildRealDataset(
   let cleanedPointCount = 0;
   let cleanedFirst = "";
   let cleanedLast = "";
-  await streamCsv<CleanRow>(cleanCsvPath, (row) => {
-    cleanedPointCount += 1;
-    cleanedVessels.add(row.mmsi);
-    if (!cleanedFirst || row.ts < cleanedFirst) {
-      cleanedFirst = row.ts;
-    }
-    if (!cleanedLast || row.ts > cleanedLast) {
-      cleanedLast = row.ts;
-    }
-    const existing = voyageRows.get(row.voyage_uuid) ?? {
-      vesselId: row.mmsi,
-      routeLine: row.route_line,
-      points: []
-    };
-    existing.points.push({
-      ts: row.ts,
-      lat: Number(row.lat),
-      lon: Number(row.lon),
-      speed: Number(row.sog),
-      heading: row.hdg ? Number(row.hdg) : null,
-      cog: row.cog ? Number(row.cog) : null
+
+  for (const file of files) {
+    await streamCsv<CleanRow>(file.filePath, (row) => {
+      const routeId = row.routeId?.trim() || row.voyage_uuid?.trim();
+      const rawTs = row.timestamp_new?.trim() || row.timestamp?.trim() || row.ts?.trim() || "";
+      const ts = parseFlexibleTimestamp(rawTs);
+      const lat = Number(row.latitude ?? row.lat);
+      const lon = Number(row.longitude ?? row.lon);
+      const speed = Number(row.speed ?? row.sog ?? 0);
+      if (!routeId || !ts || Number.isNaN(lat) || Number.isNaN(lon)) {
+        return;
+      }
+
+      cleanedPointCount += 1;
+      if (row.mmsi) {
+        cleanedVessels.add(row.mmsi);
+      }
+      if (!cleanedFirst || ts < cleanedFirst) {
+        cleanedFirst = ts;
+      }
+      if (!cleanedLast || ts > cleanedLast) {
+        cleanedLast = ts;
+      }
+
+      const voyageId = `${file.fileKey}-${routeId}`;
+      const existing = voyageRows.get(voyageId) ?? {
+        vesselId: row.mmsi || row.vesselName || voyageId,
+        routeKey: file.fileKey,
+        fileKey: file.fileKey,
+        routeLine: row.route_line?.trim() ?? "",
+        points: []
+      };
+      existing.points.push({
+        sequence: cleanedPointCount,
+        ts,
+        lat,
+        lon,
+        speed,
+        heading: row.heading ? Number(row.heading) : row.hdg ? Number(row.hdg) : null,
+        cog: row.course ? Number(row.course) : row.cog ? Number(row.cog) : null
+      });
+      if (!existing.routeLine && row.route_line) {
+        existing.routeLine = row.route_line.trim();
+      }
+      voyageRows.set(voyageId, existing);
     });
-    existing.routeLine = existing.routeLine || row.route_line;
-    voyageRows.set(row.voyage_uuid, existing);
+  }
+
+  const orderedVoyages = [...voyageRows.entries()]
+    .map(([voyageId, value]) => ({ voyageId, ...value }))
+    .filter((voyage) => voyage.points.length > 1)
+    .sort((left, right) => {
+      const leftStart = [...left.points].sort((a, b) => a.ts.localeCompare(b.ts))[0]?.ts ?? "";
+      const rightStart = [...right.points].sort((a, b) => a.ts.localeCompare(b.ts))[0]?.ts ?? "";
+      return leftStart.localeCompare(rightStart);
+    });
+
+  const fileLevelRoutePairs = new Map<
+    string,
+    {
+      origin: string;
+      destination: string;
+    }
+  >();
+
+  const voyagesByFile = new Map<string, typeof orderedVoyages>();
+  for (const voyage of orderedVoyages) {
+    const existing = voyagesByFile.get(voyage.fileKey) ?? [];
+    existing.push(voyage);
+    voyagesByFile.set(voyage.fileKey, existing);
+  }
+
+  for (const [fileKey, voyagesInFile] of voyagesByFile.entries()) {
+    const startLabels = voyagesInFile.map((voyage) => {
+      const orderedPoints = [...voyage.points].sort(
+        (left, right) => (left.sequence ?? 0) - (right.sequence ?? 0)
+      );
+      return inferPortLabel(orderedPoints[0].lat, orderedPoints[0].lon);
+    });
+    const endLabels = voyagesInFile.map((voyage) => {
+      const orderedPoints = [...voyage.points].sort(
+        (left, right) => (left.sequence ?? 0) - (right.sequence ?? 0)
+      );
+      const lastPoint = orderedPoints[orderedPoints.length - 1];
+      return inferPortLabel(lastPoint.lat, lastPoint.lon);
+    });
+
+    fileLevelRoutePairs.set(fileKey, {
+      origin: majorityLabel(startLabels),
+      destination: majorityLabel(endLabels)
+    });
+  }
+
+  const classifiedVoyages = orderedVoyages.map((voyage) => {
+    const fallbackPair = fileLevelRoutePairs.get(voyage.fileKey) ?? {
+      origin: "Unknown",
+      destination: "Unknown"
+    };
+    const firstPassPoints = normalizeTrackOrder(
+      voyage.points,
+      fallbackPair.origin,
+      fallbackPair.destination
+    );
+    const inferredPair = inferPortPairFromTrack(firstPassPoints, fallbackPair);
+    const normalizedPoints = normalizeTrackOrder(
+      firstPassPoints,
+      inferredPair.origin,
+      inferredPair.destination
+    ).map((point, index) => ({
+      ...point,
+      sequence: index
+    }));
+    return {
+      ...voyage,
+      routeKey: `${inferredPair.origin.toLowerCase()}-${inferredPair.destination.toLowerCase()}`,
+      origin: inferredPair.origin,
+      destination: inferredPair.destination,
+      points: normalizedPoints
+    };
   });
 
-  const orderedVoyages = [...voyageRows.entries()].sort((left, right) =>
-    left[1].points[0].ts.localeCompare(right[1].points[0].ts)
-  );
-  const corridorProfile = buildMedianProfile(orderedVoyages.map(([, value]) => value.points));
-  const voyages = orderedVoyages.map(([voyageId, value], index) =>
+  const routeTracks = new Map<string, TrackPointInput[][]>();
+  for (const voyage of classifiedVoyages) {
+    const tracks = routeTracks.get(voyage.routeKey) ?? [];
+    tracks.push(voyage.points);
+    routeTracks.set(voyage.routeKey, tracks);
+  }
+
+  const corridorProfiles = new Map<string, number[]>();
+  for (const [routeKey, tracks] of routeTracks.entries()) {
+    corridorProfiles.set(routeKey, buildMedianProfile(tracks));
+  }
+
+  const corridorProfile = buildMedianProfile(classifiedVoyages.map((voyage) => voyage.points));
+  const voyages = classifiedVoyages.map((voyage, index) =>
     buildVoyageFromTrack({
-      voyageId,
+      voyageId: voyage.voyageId,
       voyageIndex: index + 1,
-      label: `真实航次 ${index + 1}`,
+      label: `Real Voyage ${index + 1} (${voyage.origin}-${voyage.destination})`,
       sourceType: "real",
-      origin: "Tianjin",
-      destination: "Qingdao",
-      vesselId: value.vesselId,
-      track: value.points,
-      referenceRoute: parseLineStringWkt(value.routeLine),
-      referenceSpeedProfile: corridorProfile
+      origin: voyage.origin,
+      destination: voyage.destination,
+      vesselId: voyage.vesselId,
+      track: voyage.points,
+      referenceRoute:
+        voyage.routeLine && voyage.routeLine.startsWith("LINESTRING")
+          ? parseLineStringWkt(voyage.routeLine)
+          : undefined,
+      referenceSpeedProfile: corridorProfiles.get(voyage.routeKey)
     })
   );
+
   const rawSummary: RawSummary = {
-    rawPointCount,
+    rawPointCount: cleanedPointCount,
     cleanedPointCount,
-    rawUniqueVessels: rawVessels.size,
+    rawUniqueVessels: cleanedVessels.size,
     cleanedUniqueVessels: cleanedVessels.size,
     voyageCount: voyages.length,
     rawDateRange: {
-      start: rawFirst.slice(0, 10),
-      end: rawLast.slice(0, 10)
+      start: cleanedFirst.slice(0, 10),
+      end: cleanedLast.slice(0, 10)
     },
     cleanedDateRange: {
       start: cleanedFirst.slice(0, 10),
@@ -352,6 +817,10 @@ export async function buildRealDataset(
   const meta: DatasetMeta = {
     generatedAt: new Date().toISOString(),
     latestDate: rawSummary.cleanedDateRange.end,
+    timeRange: {
+      startTs: cleanedFirst,
+      endTs: cleanedLast
+    },
     dateRange: rawSummary.cleanedDateRange,
     rawSummary
   };
@@ -372,6 +841,7 @@ export function buildMockVoyages(
         new Date(new Date(seed.startTs).getTime() + index * seed.intervalMinutes * 60_000)
       );
       return {
+        sequence: index,
         ts,
         lon,
         lat,

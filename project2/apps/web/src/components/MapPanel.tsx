@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import MarineMap from './MarineMap'; // 引入我们新写的流体地图组件
 
 import type { SourceType } from "../../../../shared/contracts";
 import type {
@@ -7,8 +6,9 @@ import type {
   EnvironmentFieldPayload,
   RouteGeometryPayload
 } from "../lib/api";
-import { Badge } from "./Badge";
 import { cnNumber } from "../lib/format";
+import { Badge } from "./Badge";
+import MarineMap from "./MarineMap";
 
 interface MapPanelProps {
   geometry: RouteGeometryPayload | null;
@@ -31,43 +31,42 @@ export function MapPanel({
   onSelectTimestamp,
   layerLabel
 }: MapPanelProps) {
-  
   const activePoint = useMemo(
-    () =>
-      points.find((point) => point.ts === selectedTimestamp) ?? points[0] ?? null,
+    () => points.find((point) => point.ts === selectedTimestamp) ?? points[0] ?? null,
     [points, selectedTimestamp]
   );
 
-  // 提取当前需要渲染的环境场类型 (wind / current / wave)
-  const mapMode = environment?.layer || 'wind';
+  const mapMode = environment?.layer === "current" ? "current" : "wind";
 
   return (
-    <div className="panel map-shell" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div
+      className="panel map-shell"
+      style={{ display: "flex", flexDirection: "column", height: "100%" }}
+    >
       <div className="panel-header">
         <div>
-          <h3>航线空间地图</h3>
-          {/* 这里文案稍微改一下，体现是流体场 */}
-          <p>Leaflet 主视图 + {layerLabel}流体粒子场</p> 
+          <h3>航迹地图</h3>
+          <p>
+            这里始终只显示当前选中的一条航次，并且加载这条船的完整 AIS 航迹和对应理想航线。
+          </p>
         </div>
         <div className="map-header-right">
           {voyageSourceType ? <Badge sourceType={voyageSourceType} /> : null}
           {environmentSourceType ? <Badge sourceType={environmentSourceType} /> : null}
+          {points.length > 0 ? <span className="map-caption">AIS points: {points.length}</span> : null}
           {activePoint ? (
             <span className="map-caption">
-              {activePoint.ts.slice(5, 16).replace("T", " ")} ·{" "}
-              {cnNumber(activePoint.actualSpeed, 1)} kn
+              {activePoint.ts.slice(5, 16).replace("T", " ")} | {cnNumber(activePoint.actualSpeed, 1)} kn
             </span>
           ) : null}
         </div>
       </div>
-      
-      {/* 核心地图渲染区，确保有 flex: 1 撑开高度 */}
-      <div className="map-wrapper" style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        <MarineMap 
-          mode={mapMode as any} 
-          geometry={geometry} 
-          points={points} 
-          onSelectTimestamp={onSelectTimestamp} 
+      <div className="map-wrapper" style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+        <MarineMap
+          mode={mapMode}
+          geometry={geometry}
+          points={points}
+          onSelectTimestamp={onSelectTimestamp}
         />
       </div>
     </div>

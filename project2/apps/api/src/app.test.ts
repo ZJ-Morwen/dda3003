@@ -19,7 +19,7 @@ describe("api app", () => {
     await app.close();
   });
 
-  it("serves port flow data including the real Tianjin-Qingdao pair", async () => {
+  it("serves real port flow data derived from cleaned AIS routes", async () => {
     const app = await buildApp();
     const response = await app.inject({
       method: "GET",
@@ -29,14 +29,8 @@ describe("api app", () => {
     const payload = response.json() as {
       items: Array<{ source: string; target: string; sourceType: string }>;
     };
-    expect(
-      payload.items.some(
-        (item) =>
-          item.source === "Tianjin" &&
-          item.target === "Qingdao" &&
-          item.sourceType === "real"
-      )
-    ).toBe(true);
+    expect(payload.items.length).toBeGreaterThan(1);
+    expect(payload.items.every((item) => item.sourceType === "real")).toBe(true);
     await app.close();
   });
 });

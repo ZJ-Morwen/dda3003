@@ -24,9 +24,9 @@ export interface DatasetVoyage {
   availableDays: string[];
   emissionUnit: string;
   bounds: [number, number, number, number];
-  actualRoute: [number, number][];
-  referenceRoute: [number, number][];
-  series: EmissionSeriesPoint[];
+  actualRoute?: [number, number][];
+  referenceRoute?: [number, number][];
+  series?: EmissionSeriesPoint[];
   metrics: RouteMetricsSummary;
 }
 
@@ -49,6 +49,10 @@ export interface RawSummary {
 export interface DatasetMeta {
   generatedAt: string;
   latestDate: string;
+  timeRange: {
+    startTs: string;
+    endTs: string;
+  };
   dateRange: {
     start: string;
     end: string;

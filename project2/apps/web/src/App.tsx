@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ENVIRONMENT_LAYER_LABELS } from "../../../shared/contracts";
@@ -7,7 +7,6 @@ import {
   getEmissionSeries,
   getEnvironmentLayer,
   getMetrics,
-  getPortPairVoyages,
   getRoute,
   recordAnimationCheck
 } from "./lib/api";
@@ -19,7 +18,6 @@ import { MapPanel } from "./components/MapPanel";
 import { MetricsPanel } from "./components/MetricsPanel";
 import { ScatterPanel } from "./components/ScatterPanel";
 import { SeriesPanels } from "./components/SeriesPanels";
-import { TimeFilterStrip } from "./components/TimeFilterStrip";
 import { WeightsPanel } from "./components/WeightsPanel";
 import { cnNumber } from "./lib/format";
 import { useDashboardStore } from "./store/dashboard-store";
@@ -27,92 +25,61 @@ import { useDashboardStore } from "./store/dashboard-store";
 const MAP_ENVIRONMENT_LAYERS = ["wind", "current"] as const;
 
 export default function App() {
+  const [scatterOriginFilter, setScatterOriginFilter] = useState<string | null>(null);
+  const [scatterDestinationFilter, setScatterDestinationFilter] = useState<string | null>(null);
+
   const {
-    timeFilter,
     envLayer,
     selectedVoyageId,
     selectedPortPair,
     selectedTimestamp,
     dataSource,
-    initialized,
-    setTimeFilter,
     setEnvLayer,
     setSelectedVoyageId,
     setSelectedPortPair,
-    setSelectedTimestamp,
-    setInitialized
+    setSelectedTimestamp
   } = useDashboardStore();
 
   const snapshotQuery = useQuery({
-    queryKey: ["snapshot", timeFilter?.startDay, timeFilter?.endDay],
-    queryFn: () =>
-      getDashboardSnapshot(timeFilter?.startDay, timeFilter?.endDay ?? timeFilter?.startDay)
+    queryKey: ["snapshot"],
+    queryFn: () => getDashboardSnapshot()
   });
-
-  useEffect(() => {
-    if (!snapshotQuery.data || initialized) return;
-    setTimeFilter(snapshotQuery.data.timeFilter);
-    if (snapshotQuery.data.latestVoyageId) {
-      setSelectedVoyageId(snapshotQuery.data.latestVoyageId, "real");
-    }
-    setInitialized(true);
-  }, [
-    initialized,
-    setInitialized,
-    setSelectedVoyageId,
-    setTimeFilter,
-    snapshotQuery.data
-  ]);
-
-  const pairVoyagesQuery = useQuery({
-    queryKey: [
-      "pair-voyages",
-      selectedPortPair?.[0],
-      selectedPortPair?.[1],
-      timeFilter?.startDay,
-      timeFilter?.endDay
-    ],
-    enabled: Boolean(selectedPortPair && timeFilter),
-    queryFn: () => getPortPairVoyages(selectedPortPair![0], selectedPortPair![1], timeFilter!)
-  });
-
-  useEffect(() => {
-    if (!selectedPortPair || !pairVoyagesQuery.data?.items.length) return;
-    const first = pairVoyagesQuery.data.items[0];
-    setSelectedVoyageId(first.voyageId, first.sourceType);
-  }, [pairVoyagesQuery.data, selectedPortPair, setSelectedVoyageId]);
 
   const emissionSeriesQuery = useQuery({
-    queryKey: ["emission-series", selectedVoyageId, timeFilter?.startDay, timeFilter?.endDay],
-    enabled: Boolean(selectedVoyageId && timeFilter),
-    queryFn: () => getEmissionSeries(selectedVoyageId!, timeFilter!)
+    queryKey: ["emission-series", selectedVoyageId],
+    enabled: Boolean(selectedVoyageId),
+    queryFn: () => getEmissionSeries(selectedVoyageId!)
   });
 
   const activeTs =
     selectedTimestamp ??
     emissionSeriesQuery.data?.points[0]?.ts ??
-    `${timeFilter?.startDay ?? "2025-09-30"}T12:00:00+08:00`;
+    null;
+  const environmentTs =
+    activeTs ??
+    snapshotQuery.data?.availableTimeRange.startTs ??
+    "2025-01-01T00:00:00.000Z";
 
   const routeQuery = useQuery({
-    queryKey: ["route", selectedVoyageId, timeFilter?.startDay, timeFilter?.endDay, activeTs],
-    enabled: Boolean(selectedVoyageId && timeFilter),
-    queryFn: () => getRoute(selectedVoyageId!, timeFilter!, activeTs)
+    queryKey: ["route", selectedVoyageId, activeTs],
+    enabled: Boolean(selectedVoyageId),
+    queryFn: () => getRoute(selectedVoyageId!, { ts: activeTs ?? undefined })
   });
 
   const metricsQuery = useQuery({
-    queryKey: ["metrics", selectedVoyageId, timeFilter?.startDay, timeFilter?.endDay],
-    enabled: Boolean(selectedVoyageId && timeFilter),
-    queryFn: () => getMetrics(selectedVoyageId!, timeFilter!)
+    queryKey: ["metrics", selectedVoyageId],
+    enabled: Boolean(selectedVoyageId),
+    queryFn: () => getMetrics(selectedVoyageId!)
   });
 
   const environmentQuery = useQuery({
-    queryKey: ["environment-layer", envLayer, activeTs],
-    enabled: Boolean(timeFilter),
-    queryFn: () => getEnvironmentLayer(envLayer, activeTs)
+    queryKey: ["environment-layer", envLayer, environmentTs],
+    enabled: Boolean(snapshotQuery.data),
+    queryFn: () => getEnvironmentLayer(envLayer, environmentTs)
   });
 
   useEffect(() => {
-    if (!environmentQuery.isError || !timeFilter) return;
+    if (!environmentQuery.isError || !snapshotQuery.data) return;
     void recordAnimationCheck({
       layer: envLayer,
       ok: false,
@@ -120,7 +87,7 @@ export default function App() {
         environmentQuery.error instanceof Error
           ? environmentQuery.error.message
           : "unknown",
-      timeFilter,
+      timeFilter: snapshotQuery.data.timeFilter,
       selectedVoyageId
     });
   }, [
@@ -128,7 +95,7 @@ export default function App() {
     environmentQuery.error,
     environmentQuery.isError,
     selectedVoyageId,
-    timeFilter
+    snapshotQuery.data
   ]);
 
   const activePoint = useMemo(
@@ -139,12 +106,104 @@ export default function App() {
     [emissionSeriesQuery.data?.points, selectedTimestamp]
   );
 
-  if (snapshotQuery.isLoading || !snapshotQuery.data || !timeFilter) {
+  const networkSummary = useMemo(() => {
+    const ports = new Set(
+      snapshotQuery.data?.portFlows.flatMap((flow) => [flow.source, flow.target]) ?? []
+    );
+    return {
+      portCount: ports.size,
+      flowCount: snapshotQuery.data?.portFlows.length ?? 0
+    };
+  }, [snapshotQuery.data?.portFlows]);
+
+  const scatterOriginOptions = useMemo(() => {
+    const pool =
+      snapshotQuery.data?.scatter.filter(
+        (item) =>
+          !scatterDestinationFilter || item.destination === scatterDestinationFilter
+      ) ?? [];
+    return [...new Set(pool.map((item) => item.origin))].sort((left, right) =>
+      left.localeCompare(right)
+    );
+  }, [scatterDestinationFilter, snapshotQuery.data?.scatter]);
+
+  const scatterDestinationOptions = useMemo(() => {
+    const pool =
+      snapshotQuery.data?.scatter.filter(
+        (item) => !scatterOriginFilter || item.origin === scatterOriginFilter
+      ) ?? [];
+    return [...new Set(pool.map((item) => item.destination))].sort((left, right) =>
+      left.localeCompare(right)
+    );
+  }, [scatterOriginFilter, snapshotQuery.data?.scatter]);
+
+  const filteredScatter = useMemo(
+    () =>
+      snapshotQuery.data?.scatter.filter(
+        (item) =>
+          (!scatterOriginFilter || item.origin === scatterOriginFilter) &&
+          (!scatterDestinationFilter || item.destination === scatterDestinationFilter)
+      ) ?? [],
+    [scatterDestinationFilter, scatterOriginFilter, snapshotQuery.data?.scatter]
+  );
+
+  useEffect(() => {
+    if (!selectedPortPair) return;
+    const [source, target] = selectedPortPair;
+    setScatterOriginFilter((current) => (current === source ? current : source));
+    setScatterDestinationFilter((current) => (current === target ? current : target));
+  }, [selectedPortPair]);
+
+  useEffect(() => {
+    if (scatterOriginFilter && !scatterOriginOptions.includes(scatterOriginFilter)) {
+      setScatterOriginFilter(null);
+    }
+  }, [scatterOriginFilter, scatterOriginOptions]);
+
+  useEffect(() => {
+    if (
+      scatterDestinationFilter &&
+      !scatterDestinationOptions.includes(scatterDestinationFilter)
+    ) {
+      setScatterDestinationFilter(null);
+    }
+  }, [scatterDestinationFilter, scatterDestinationOptions]);
+
+  useEffect(() => {
+    if (
+      selectedVoyageId &&
+      !filteredScatter.some((item) => item.voyageId === selectedVoyageId)
+    ) {
+      setSelectedVoyageId(null);
+    }
+  }, [filteredScatter, selectedVoyageId, setSelectedVoyageId]);
+
+  useEffect(() => {
+    if (scatterOriginFilter && scatterDestinationFilter) {
+      if (
+        selectedPortPair?.[0] !== scatterOriginFilter ||
+        selectedPortPair?.[1] !== scatterDestinationFilter
+      ) {
+        setSelectedPortPair([scatterOriginFilter, scatterDestinationFilter]);
+      }
+      return;
+    }
+    if (selectedPortPair) {
+      setSelectedPortPair(null);
+    }
+  }, [
+    scatterDestinationFilter,
+    scatterOriginFilter,
+    selectedPortPair,
+    setSelectedPortPair
+  ]);
+
+  if (snapshotQuery.isLoading || !snapshotQuery.data) {
     return (
       <main className="app-shell loading-shell">
         <div className="hero">
-          <h1>天津-青岛 AIS 可视化分析平台</h1>
-          <p>正在装载预处理后的真实 AIS 数据与模拟扩展模块…</p>
+          <h1>AIS Visual Analytics</h1>
+          <p>Loading full real AIS routes and linked visual analytics panels.</p>
         </div>
       </main>
     );
@@ -155,19 +214,21 @@ export default function App() {
       <header className="app-header">
         <div>
           <p className="eyebrow">AIS Visual Analytics WebApp</p>
-          <h1>天津-青岛 AIS 航线优化可视化平台</h1>
+          <h1>多港口 AIS 航迹与排放可视化平台</h1>
           <p className="subhead">
-            真实航次驱动主链路分析，标准航线由真实速度剖面推导，多港口网络与环境层由独立 mock 数据补齐。
+            弦图始终保留全部港口和全部流向，散点图支持按起点港和终点港筛选。点击散点图中的单个航次点后，地图只显示这一条航次的实际 AIS 航迹和理想航线。
           </p>
         </div>
         <div className="header-meta">
           <div className="header-chip">
-            <span>Anchor Date</span>
-            <strong>{snapshotQuery.data.anchorDate}</strong>
+            <span>当前航次</span>
+            <strong>{selectedVoyageId ?? "None"}</strong>
           </div>
           <div className="header-chip">
-            <span>当前选中</span>
-            <strong>{selectedVoyageId ?? "未选择"}</strong>
+            <span>港口网络</span>
+            <strong>
+              {networkSummary.portCount} 个港口 / {networkSummary.flowCount} 条流向
+            </strong>
           </div>
           {dataSource ? (
             <div className="header-chip">
@@ -180,15 +241,10 @@ export default function App() {
 
       <section className="dashboard-grid">
         <aside className="left-rail">
-          <TimeFilterStrip
-            anchorDate={snapshotQuery.data.anchorDate}
-            value={timeFilter}
-            onChange={setTimeFilter}
-          />
           <div className="panel">
             <div className="panel-header">
               <h3>环境图层</h3>
-              <p>地图环境场切换与动画自检</p>
+              <p>切换地图上的海洋环境辅助图层。</p>
             </div>
             <div className="env-switches">
               {MAP_ENVIRONMENT_LAYERS.map((layer) => (
@@ -203,10 +259,6 @@ export default function App() {
               ))}
             </div>
           </div>
-          <ScatterPanel
-            items={snapshotQuery.data.scatter}
-            onSelect={(item) => setSelectedVoyageId(item.voyageId, item.sourceType)}
-          />
           <WeightsPanel snapshot={snapshotQuery.data} />
         </aside>
 
@@ -244,24 +296,32 @@ export default function App() {
           <div className="panel">
             <div className="panel-header">
               <h3>当前状态</h3>
-              <p>交互与联动摘要</p>
+              <p>当前筛选和联动结果摘要。</p>
             </div>
             <ul className="status-list">
-              <li>航次数量：{snapshotQuery.data.scatter.length}</li>
+              <li>当前航次数: {filteredScatter.length}</li>
+              <li>环境图层: {ENVIRONMENT_LAYER_LABELS[envLayer]}</li>
+              <li>累计排放差值: {cnNumber(activePoint?.deltaCumulative ?? 0)}</li>
               <li>
-                时间窗口：{timeFilter.startDay} ~ {timeFilter.endDay ?? timeFilter.startDay}
-              </li>
-              <li>环境层：{ENVIRONMENT_LAYER_LABELS[envLayer]}</li>
-              <li>当前累计差值：{cnNumber(activePoint?.deltaCumulative ?? 0)}</li>
-              <li>
-                港口对：
-                {selectedPortPair
-                  ? `${selectedPortPair[0]} → ${selectedPortPair[1]}`
-                  : "未选择"}
+                港口对: {selectedPortPair ? `${selectedPortPair[0]} -> ${selectedPortPair[1]}` : "未选择"}
               </li>
             </ul>
           </div>
         </aside>
+      </section>
+      <section className="bottom-stage">
+        <ScatterPanel
+          items={filteredScatter}
+          totalCount={snapshotQuery.data.scatter.length}
+          selectedVoyageId={selectedVoyageId}
+          originFilter={scatterOriginFilter}
+          destinationFilter={scatterDestinationFilter}
+          originOptions={scatterOriginOptions}
+          destinationOptions={scatterDestinationOptions}
+          onChangeOriginFilter={setScatterOriginFilter}
+          onChangeDestinationFilter={setScatterDestinationFilter}
+          onSelect={(item) => setSelectedVoyageId(item.voyageId, item.sourceType)}
+        />
       </section>
     </main>
   );

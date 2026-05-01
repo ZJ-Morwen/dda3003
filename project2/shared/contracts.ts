@@ -1,15 +1,22 @@
 export type SourceType = "real" | "derived" | "mock";
 
 export interface TimeFilter {
-  mode: "single_day" | "range";
-  startDay: string;
-  endDay?: string;
+  mode: "instant" | "range";
+  startTs: string;
+  endTs?: string;
 }
 
 export interface ScatterItem {
   voyageId: string;
   voyageIndex: number;
+  startTs: string;
+  endTs: string;
+  origin: string;
+  destination: string;
+  distanceNm: number;
+  avgSpeed: number;
   totalEmission: number;
+  emissionPerNm: number;
   emissionUnit: string;
   label?: string;
   sourceType: SourceType;
@@ -145,6 +152,10 @@ export interface DataDescriptionCard {
 
 export interface DashboardSnapshot {
   anchorDate: string;
+  availableTimeRange: {
+    startTs: string;
+    endTs: string;
+  };
   timeFilter: TimeFilter;
   scatter: ScatterItem[];
   weights: {
