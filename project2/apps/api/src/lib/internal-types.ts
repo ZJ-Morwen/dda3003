@@ -1,4 +1,9 @@
-import type { EmissionSeriesPoint, EnvironmentWeights, SourceType } from "../../../../shared/contracts.js";
+import type {
+  BestRouteCandidate,
+  EmissionSeriesPoint,
+  EnvironmentWeights,
+  SourceType
+} from "../../../../shared/contracts.js";
 
 export interface RouteMetricsSummary {
   durationHours: number;
@@ -26,6 +31,7 @@ export interface DatasetVoyage {
   bounds: [number, number, number, number];
   actualRoute?: [number, number][];
   referenceRoute?: [number, number][];
+  bestRoutes?: BestRouteCandidate[];
   series?: EmissionSeriesPoint[];
   metrics: RouteMetricsSummary;
 }

@@ -82,11 +82,31 @@ export interface LineStringGeometry {
   coordinates: [number, number][];
 }
 
+export interface RouteDisplayMetrics {
+  label: string;
+  distanceNm: number;
+  avgSpeed: number;
+  totalEmission: number;
+  emissionPerNm: number;
+  durationHours: number;
+}
+
+export interface BestRouteCandidate extends RouteDisplayMetrics {
+  routeId: string;
+  rank: number;
+  sourceType: "derived";
+  coordinates: [number, number][];
+  reductionPercent: number;
+  isRecommended: boolean;
+}
+
 export interface RouteGeometryPayload {
   voyageId: string;
   sourceType: SourceType;
   actualRoute: LineStringGeometry;
   referenceRoute: LineStringGeometry;
+  actualMetrics?: RouteDisplayMetrics;
+  bestRoutes?: BestRouteCandidate[];
   marker?: {
     ts: string;
     actual: [number, number];

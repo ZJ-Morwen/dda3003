@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -29,6 +28,7 @@ import type {
   EnvironmentWeightsPayloadInternal,
   RealDataset
 } from "../lib/internal-types.js";
+import { projectPath } from "../lib/project-paths.js";
 import { round } from "../lib/stats.js";
 import { buildTimeFilter, ensureTimeFilter, normalizeTimeInput, slidingWindowDays, timestampInRange } from "../lib/time.js";
 
@@ -38,52 +38,32 @@ const ENVIRONMENT_LAYER_LABELS: Record<"wind" | "current" | "wave", string> = {
   wave: "Wave"
 };
 
-function resolveProjectRoot(): string {
-  const candidates = [
-    process.cwd(),
-    path.resolve(process.cwd(), ".."),
-    path.resolve(process.cwd(), "../.."),
-    path.resolve(process.cwd(), "../../..")
-  ];
-  const match = candidates.find((candidate) =>
-    existsSync(path.resolve(candidate, "data", "mock", "mock-voyage-seeds.json"))
-  );
-  return match ?? process.cwd();
-}
-
-const PROJECT_ROOT = resolveProjectRoot();
-const GENERATED_DATA_PATH = path.resolve(
-  PROJECT_ROOT,
+const GENERATED_DATA_PATH = projectPath(
   "data",
   "generated",
   "real-data.json"
 );
-const GENERATED_VOYAGES_DIR = path.resolve(
-  PROJECT_ROOT,
+const GENERATED_VOYAGES_DIR = projectPath(
   "data",
   "generated",
   "voyages"
 );
-const MOCK_VOYAGES_PATH = path.resolve(
-  PROJECT_ROOT,
+const MOCK_VOYAGES_PATH = projectPath(
   "data",
   "mock",
   "mock-voyage-seeds.json"
 );
-const PORT_FLOW_SEEDS_PATH = path.resolve(
-  PROJECT_ROOT,
+const PORT_FLOW_SEEDS_PATH = projectPath(
   "data",
   "mock",
   "port-flow-seeds.json"
 );
-const ENVIRONMENT_SEEDS_PATH = path.resolve(
-  PROJECT_ROOT,
+const ENVIRONMENT_SEEDS_PATH = projectPath(
   "data",
   "mock",
   "environment-seeds.json"
 );
-const CHECK_ANIMATION_PATH = path.resolve(
-  PROJECT_ROOT,
+const CHECK_ANIMATION_PATH = projectPath(
   "data",
   "generated",
   "check-animation.json"
@@ -426,6 +406,18 @@ function buildRouteGeometry(voyage: DatasetVoyage, timeFilter: TimeFilter, ts?: 
     : slice[0];
   const actualRoute = slice.map((point) => [point.lon, point.lat] as [number, number]);
   const referenceRoute = slice.map((point) => [point.refLon, point.refLat] as [number, number]);
+  let actualDistance = 0;
+  for (let index = 1; index < actualRoute.length; index += 1) {
+    const [prevLon, prevLat] = actualRoute[index - 1];
+    const [lon, lat] = actualRoute[index];
+    actualDistance += haversineNm(prevLat, prevLon, lat, lon);
+  }
+  const actualTotalEmission = slice.reduce((sum, point) => sum + point.actualEmission, 0);
+  const durationHours =
+    (new Date(slice[slice.length - 1].ts).getTime() - new Date(slice[0].ts).getTime()) /
+    (1000 * 60 * 60);
+  const bestRoutes = voyage.bestRoutes ?? [];
+  const bestRouteCoordinates = bestRoutes.flatMap((route) => route.coordinates);
   return {
     voyageId: voyage.voyageId,
     sourceType: voyage.sourceType,
@@ -437,12 +429,21 @@ function buildRouteGeometry(voyage: DatasetVoyage, timeFilter: TimeFilter, ts?: 
       type: "LineString",
       coordinates: referenceRoute
     },
+    actualMetrics: {
+      label: "Actual AIS Route",
+      distanceNm: round(actualDistance, 3),
+      avgSpeed: round(durationHours > 0 ? actualDistance / durationHours : 0, 3),
+      durationHours: round(durationHours, 3),
+      totalEmission: round(actualTotalEmission, 3),
+      emissionPerNm: round(actualTotalEmission / (actualDistance || 1), 3)
+    },
+    bestRoutes,
     marker: {
       ts: markerPoint.ts,
       actual: [markerPoint.lon, markerPoint.lat],
       reference: [markerPoint.refLon, markerPoint.refLat]
     },
-    bounds: computeBounds([...actualRoute, ...referenceRoute])
+    bounds: computeBounds([...actualRoute, ...referenceRoute, ...bestRouteCoordinates])
   };
 }
 
@@ -455,7 +456,7 @@ async function loadVoyageForDetail(dataset: CompositeDataset, voyageId: string):
   if (mockVoyage) {
     return mockVoyage;
   }
-  return (await loadRealVoyageDetail(voyageId)) ?? undefined;
+  return (await loadRealVoyageDetail(voyageId)) ?? findVoyageById(dataset, voyageId);
 }
 
 export async function getMetaLatestDate(): Promise<MetaLatestDatePayload> {

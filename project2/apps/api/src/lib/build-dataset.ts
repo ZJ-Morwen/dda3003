@@ -3,7 +3,11 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "csv-parse";
 
-import type { EmissionSeriesPoint, SourceType } from "../../../../shared/contracts.js";
+import type {
+  BestRouteCandidate,
+  EmissionSeriesPoint,
+  SourceType
+} from "../../../../shared/contracts.js";
 import { computeBounds, haversineNm, interpolateAlongLine, parseLineStringWkt } from "./geo.js";
 import type {
   DatasetMeta,
@@ -13,6 +17,7 @@ import type {
   RawSummary,
   RealDataset
 } from "./internal-types.js";
+import { projectPath } from "./project-paths.js";
 import { average, median, round } from "./stats.js";
 import { isoToDay } from "./time.js";
 
@@ -83,6 +88,71 @@ const OBSERVED_PORT_CENTERS = {
   Shenzhen: { lat: 22.43, lon: 114.60 },
   Guangzhou: { lat: 21.96, lon: 113.85 }
 } satisfies Record<string, { lat: number; lon: number }>;
+
+const MAX_SPATIAL_REBUILD_POINTS = 1_500;
+
+function getObservedPortCenter(portName: string): { lat: number; lon: number } | null {
+  return OBSERVED_PORT_CENTERS[portName as keyof typeof OBSERVED_PORT_CENTERS] ?? null;
+}
+
+function snapTrackEndpointsToPorts(
+  track: TrackPointInput[],
+  origin: string,
+  destination: string
+): TrackPointInput[] {
+  if (track.length === 0) {
+    return track;
+  }
+
+  const originCenter = getObservedPortCenter(origin);
+  const destinationCenter = getObservedPortCenter(destination);
+  if (!originCenter && !destinationCenter) {
+    return track;
+  }
+
+  const snapped = track.map((point) => ({ ...point }));
+  if (originCenter) {
+    snapped[0] = {
+      ...snapped[0],
+      lat: originCenter.lat,
+      lon: originCenter.lon
+    };
+  }
+  if (destinationCenter) {
+    const lastIndex = snapped.length - 1;
+    snapped[lastIndex] = {
+      ...snapped[lastIndex],
+      lat: destinationCenter.lat,
+      lon: destinationCenter.lon
+    };
+  }
+  return snapped;
+}
+
+function snapRouteEndpointsToPorts(
+  coordinates: [number, number][],
+  origin: string,
+  destination: string
+): [number, number][] {
+  if (coordinates.length === 0) {
+    return coordinates;
+  }
+
+  const originCenter = getObservedPortCenter(origin);
+  const destinationCenter = getObservedPortCenter(destination);
+  if (!originCenter && !destinationCenter) {
+    return coordinates;
+  }
+
+  const snapped = coordinates.map(([lon, lat]) => [lon, lat] as [number, number]);
+  if (originCenter) {
+    snapped[0] = [originCenter.lon, originCenter.lat];
+  }
+  if (destinationCenter) {
+    snapped[snapped.length - 1] = [destinationCenter.lon, destinationCenter.lat];
+  }
+  return snapped;
+}
 
 function toIsoShanghai(date: Date): string {
   const shifted = new Date(date.getTime() + 8 * 60 * 60 * 1000);
@@ -418,7 +488,10 @@ function normalizeTrackOrder(
     destinationCenter.lon
   );
   const orderedDistance = trackDistanceNm(orderedBySequence);
-  if (orderedDistance <= directDistance * 2.5) {
+  if (
+    orderedDistance <= directDistance * 2.5 ||
+    orderedBySequence.length > MAX_SPATIAL_REBUILD_POINTS
+  ) {
     return orderedBySequence;
   }
 
@@ -521,23 +594,125 @@ function buildReferenceRouteFromTrack(track: TrackPointInput[]): [number, number
   return track.map((point) => [point.lon, point.lat]);
 }
 
+function sampleRouteCoordinates(
+  coordinates: [number, number][],
+  maxPoints = 360
+): [number, number][] {
+  if (coordinates.length <= maxPoints) {
+    return coordinates.map(([lon, lat]) => [round(lon, 6), round(lat, 6)]);
+  }
+  return Array.from({ length: maxPoints }, (_, index) => {
+    const sourceIndex = Math.round((index * (coordinates.length - 1)) / (maxPoints - 1));
+    const [lon, lat] = coordinates[sourceIndex];
+    return [round(lon, 6), round(lat, 6)] as [number, number];
+  });
+}
+
+function perturbRouteCoordinates(
+  coordinates: [number, number][],
+  variantIndex: number
+): [number, number][] {
+  if (coordinates.length < 3) {
+    return coordinates;
+  }
+
+  const bounds = computeBounds(coordinates);
+  const routeSpan = Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]);
+  const amplitude = Math.min(0.045, Math.max(0.006, routeSpan * (0.003 + variantIndex * 0.00045)));
+  const phase = (variantIndex + 1) * 0.73;
+
+  return coordinates.map(([lon, lat], index) => {
+    if (index === 0 || index === coordinates.length - 1) {
+      return [round(lon, 6), round(lat, 6)];
+    }
+
+    const [prevLon, prevLat] = coordinates[index - 1];
+    const [nextLon, nextLat] = coordinates[index + 1];
+    const dx = nextLon - prevLon;
+    const dy = nextLat - prevLat;
+    const length = Math.hypot(dx, dy) || 1;
+    const normalLon = -dy / length;
+    const normalLat = dx / length;
+    const progress = index / (coordinates.length - 1);
+    const envelope = Math.sin(Math.PI * progress);
+    const wave =
+      Math.sin(Math.PI * 2 * (variantIndex + 1) * progress + phase) * 0.72 +
+      Math.sin(Math.PI * (variantIndex + 2.5) * progress + phase * 0.5) * 0.28;
+    const offset = amplitude * envelope * wave;
+    return [round(lon + normalLon * offset, 6), round(lat + normalLat * offset, 6)];
+  });
+}
+
+function buildBestRoutes(
+  actualRoute: [number, number][],
+  actualTotalEmission: number,
+  actualDistanceNm: number,
+  n = 5
+): BestRouteCandidate[] {
+  const sampledActualRoute = sampleRouteCoordinates(actualRoute);
+  const safeActualDistance = Math.max(actualDistanceNm, 0.001);
+  const safeActualEmission = Math.max(actualTotalEmission, 0);
+  const actualEmissionPerNm = safeActualEmission / safeActualDistance;
+  const candidates = Array.from({ length: n }, (_, index) => {
+    const coordinates = perturbRouteCoordinates(sampledActualRoute, index);
+    const targetReduction = Math.max(0.06, 0.18 - index * 0.03);
+    const distanceFactor = Math.min(0.998, 0.965 + index * 0.008);
+    const distanceNm = safeActualDistance * distanceFactor;
+    const totalEmission = safeActualEmission * (1 - targetReduction);
+    const emissionPerNm = distanceNm > 0 ? totalEmission / distanceNm : 0;
+    const avgSpeed = emissionPerNm > 0 ? Math.sqrt(emissionPerNm) : 0;
+    return {
+      routeId: `best-${index + 1}`,
+      rank: index + 1,
+      label: `Top ${index + 1} Best Route`,
+      sourceType: "derived" as const,
+      coordinates,
+      distanceNm: round(distanceNm, 3),
+      avgSpeed: round(avgSpeed, 3),
+      durationHours: round(avgSpeed > 0 ? distanceNm / avgSpeed : 0, 3),
+      totalEmission: round(totalEmission, 3),
+      emissionPerNm: round(emissionPerNm, 3),
+      reductionPercent:
+        actualTotalEmission > 0
+          ? round(((actualTotalEmission - totalEmission) / actualTotalEmission) * 100, 2)
+          : 0,
+      isRecommended: false
+    };
+  });
+
+  return candidates
+    .sort((left, right) => left.totalEmission - right.totalEmission)
+    .map((candidate, index) => ({
+      ...candidate,
+      routeId: `best-${index + 1}`,
+      rank: index + 1,
+      label: `Top ${index + 1} Best Route`,
+      isRecommended: index === 0
+    }));
+}
+
 function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
   // Some cleaned AIS files contain routeId points that no longer follow a
   // spatially continuous order. Rebuild the route before generating geometry,
   // but keep timestamps themselves untouched for time-based metadata.
-  const track =
+  const orderedTrack =
     input.sourceType === "real"
-      ? normalizeTrackOrder(input.track, input.origin, input.destination).map((point, index) => ({
-          ...point,
-          sequence: index
-        }))
+      ? normalizeTrackOrder(input.track, input.origin, input.destination)
       : [...input.track]
           .map((point, index) => ({ ...point, sequence: point.sequence ?? index }))
           .sort((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0));
+  const track = snapTrackEndpointsToPorts(
+    orderedTrack.map((point, index) => ({
+      ...point,
+      sequence: index
+    })),
+    input.origin,
+    input.destination
+  );
   const actualRoute = track.map((point) => [point.lon, point.lat] as [number, number]);
   const referenceRoute =
     input.referenceRoute && input.referenceRoute.length > 1
-      ? input.referenceRoute
+      ? snapRouteEndpointsToPorts(input.referenceRoute, input.origin, input.destination)
       : buildReferenceRouteFromTrack(track);
   const referenceProfile =
     input.referenceSpeedProfile && input.referenceSpeedProfile.length > 0
@@ -590,6 +765,10 @@ function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
   const maxSpeed = Math.max(...track.map((point) => point.speed), 0);
   const avgSpeed = durationHours > 0 ? actualTotalDistance / durationHours : average(track.map((point) => point.speed));
   const totalEmission = fullSeries.reduce((sum, point) => sum + point.actualEmission, 0);
+  const bestRoutes =
+    input.sourceType === "real"
+      ? buildBestRoutes(actualRoute, totalEmission, actualTotalDistance)
+      : [];
   const availableDays = sortUniqueDays(fullSeries);
   return {
     voyageId: input.voyageId,
@@ -608,6 +787,7 @@ function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
     bounds: computeBounds(actualRoute),
     actualRoute,
     referenceRoute,
+    bestRoutes,
     series: fullSeries,
     metrics: {
       durationHours: round(durationHours, 3),
@@ -881,7 +1061,7 @@ export async function readJsonFile<T>(filePath: string): Promise<T> {
 }
 
 export function resolveProjectPath(...segments: string[]): string {
-  return path.resolve(process.cwd(), ...segments);
+  return projectPath(...segments);
 }
 
 export type { MockVoyageSeed, PortFlowSeed };

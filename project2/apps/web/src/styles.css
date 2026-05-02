@@ -331,6 +331,48 @@ button {
   justify-content: flex-end;
 }
 
+.route-hover-tooltip {
+  border: 1px solid rgba(77, 227, 214, 0.45);
+  border-radius: 6px;
+  background: rgba(7, 20, 31, 0.94);
+  color: #f5fbff;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.route-tooltip-card {
+  display: grid;
+  gap: 3px;
+  min-width: 190px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.route-tooltip-card strong {
+  color: #4de3d6;
+  font-size: 13px;
+}
+
+.port-hover-tooltip {
+  border: 1px solid rgba(248, 250, 252, 0.45);
+  border-radius: 6px;
+  background: rgba(7, 20, 31, 0.94);
+  color: #f5fbff;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
+.port-tooltip-card {
+  display: grid;
+  gap: 3px;
+  min-width: 210px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.port-tooltip-card strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
 .series-area {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

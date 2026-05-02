@@ -1,18 +1,42 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { buildRealDataset } from "../apps/api/src/lib/build-dataset.js";
+import { PROJECT_ROOT, projectPath } from "../apps/api/src/lib/project-paths.js";
 
-const root = process.cwd();
-const cleanedDataDir = path.resolve(root, "cleaned_ais_data");
-const outputDir = path.resolve(root, "data", "generated");
+const outputDir = projectPath("data", "generated");
 const voyageOutputDir = path.resolve(outputDir, "voyages");
 const outputPath = path.resolve(outputDir, "real-data.json");
 const diagnosticsPath = path.resolve(outputDir, "check-animation.json");
 
+async function countCsvFiles(dir: string): Promise<number> {
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".csv"))
+      .length;
+  } catch {
+    return 0;
+  }
+}
+
+async function resolveAisCsvDir(): Promise<string> {
+  const rootCsvCount = await countCsvFiles(PROJECT_ROOT);
+  if (rootCsvCount > 0) {
+    return PROJECT_ROOT;
+  }
+  const cleanedDataDir = projectPath("cleaned_ais_data");
+  const cleanedCsvCount = await countCsvFiles(cleanedDataDir);
+  if (cleanedCsvCount > 0) {
+    return cleanedDataDir;
+  }
+  throw new Error("No AIS CSV files found in project root or cleaned_ais_data.");
+}
+
 async function main() {
-  console.log("Building structured AIS dataset from cleaned_ais_data...");
-  const dataset = await buildRealDataset(cleanedDataDir);
+  const aisCsvDir = await resolveAisCsvDir();
+  const relativeCsvDir = path.relative(PROJECT_ROOT, aisCsvDir) || ".";
+  console.log(`Building structured AIS dataset from ${relativeCsvDir}...`);
+  const dataset = await buildRealDataset(aisCsvDir);
   await mkdir(outputDir, { recursive: true });
   await mkdir(voyageOutputDir, { recursive: true });
 
