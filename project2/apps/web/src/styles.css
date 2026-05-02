@@ -50,9 +50,10 @@ button {
   padding: 24px;
   border-radius: 24px;
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   gap: 24px;
   margin-bottom: 20px;
+  text-align: center;
 }
 
 .eyebrow {
@@ -94,14 +95,97 @@ button {
   margin-bottom: 6px;
 }
 
+.status-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.status-chip {
+  display: grid;
+  align-content: center;
+  min-height: 76px;
+}
+
+.status-chip strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 290px minmax(0, 1fr) 360px;
+  grid-template-columns: 320px minmax(0, 1fr) 360px;
   gap: 18px;
+  align-items: stretch;
+}
+
+.top-stage {
+  margin-bottom: 18px;
 }
 
 .bottom-stage {
   margin-top: 18px;
+}
+
+.status-stage {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.metrics-stage,
+.metrics-status-stage {
+  margin-top: 18px;
+}
+
+.metrics-status-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.metrics-status-stage .status-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.metrics-status-stage .status-panel .panel-header {
+  margin-bottom: 10px;
+}
+
+.metrics-status-stage .status-summary-grid {
+  flex: 1;
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.metrics-status-stage .status-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 0;
+  padding: 9px 10px;
+}
+
+.metrics-status-stage .status-chip span {
+  flex: 0 0 auto;
+  font-size: 11px;
+  margin-bottom: 0;
+}
+
+.metrics-status-stage .status-chip strong {
+  font-size: 13px;
+  min-width: 0;
+  overflow: visible;
+  text-align: right;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .left-rail,
@@ -109,10 +193,23 @@ button {
 .center-stage {
   display: grid;
   gap: 18px;
+  height: 100%;
+}
+
+.left-rail {
+  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
+  min-width: 0;
 }
 
 .center-stage {
   min-width: 0;
+  align-content: stretch;
+}
+
+.right-rail {
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .panel {
@@ -283,6 +380,15 @@ button {
   height: 340px;
 }
 
+.top-stage .chart-panel {
+  min-height: 320px;
+}
+
+.top-stage .chart {
+  height: 280px;
+}
+
+.top-stage .scatter-layout,
 .bottom-stage .scatter-layout {
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 18px;
@@ -297,12 +403,16 @@ button {
 }
 
 .map-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   padding-bottom: 14px;
 }
 
 .map-wrapper {
   position: relative;
-  min-height: 510px;
+  height: 847px;
+  min-height: 0;
   border-radius: 18px;
   overflow: hidden;
   border: 1px solid rgba(132, 173, 214, 0.12);
@@ -321,6 +431,22 @@ button {
 .map-caption {
   color: #ffd27d;
   font-size: 13px;
+}
+
+.map-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.map-env-switches {
+  gap: 8px;
+}
+
+.map-env-switches .env-pill {
+  padding: 6px 11px;
+  font-size: 12px;
 }
 
 .map-header-right {
@@ -377,6 +503,39 @@ button {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
+}
+
+.left-rail .series-area {
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-height: 0;
+}
+
+.left-rail .chart-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px;
+}
+
+.left-rail .panel-header {
+  margin-bottom: 10px;
+}
+
+.left-rail .panel-header p {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.left-rail .compact-chart {
+  height: 165px;
+}
+
+.left-rail .small-chart {
+  flex: 1;
+  height: auto;
+  min-height: 120px;
 }
 
 .badge {
@@ -440,35 +599,74 @@ button {
 
 .metric-list {
   display: grid;
-  gap: 14px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 10px;
+}
+
+.metrics-panel {
+  min-height: 0;
+}
+
+.metrics-panel .panel-header > div {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.metrics-panel .panel-header p {
+  margin: 0;
 }
 
 .metric-item {
-  padding: 12px 0 0;
-  border-top: 1px solid rgba(132, 173, 214, 0.1);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  align-items: stretch;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(132, 173, 214, 0.1);
+  border-radius: 16px;
+  background: rgba(10, 31, 47, 0.62);
 }
 
 .metric-item:first-child {
-  border-top: 0;
-  padding-top: 0;
+  border-top: 1px solid rgba(132, 173, 214, 0.1);
+  padding-top: 12px;
 }
 
 .metric-title {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  gap: 5px;
   margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.metric-name {
+  min-height: 34px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.metric-delta {
+  color: #d7ecff;
+  font-size: 13px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .metric-bars {
   display: grid;
-  gap: 8px;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  align-self: end;
 }
 
 .metric-bars small {
   display: inline-block;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
   color: #9ab8d5;
+  font-size: 12px;
 }
 
 .metric-bar {
@@ -497,12 +695,46 @@ button {
   gap: 14px;
 }
 
+.right-rail .detail-panel-active {
+  height: 330px;
+}
+
+.detail-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detail-title-row span {
+  color: #8fb4d0;
+  font-size: 13px;
+}
+
+.detail-panel .panel-header {
+  margin-bottom: 8px;
+}
+
+.detail-panel .detail-grid {
+  gap: 8px;
+}
+
+.detail-panel .panel-header p,
+.detail-panel .detail-grid p {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.detail-panel .detail-grid h4 {
+  font-size: 14px;
+}
+
 .detail-grid h4 {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
 }
 
 .detail-grid p {
-  margin: 4px 0;
+  margin: 2px 0;
   color: #c9def0;
   font-size: 14px;
 }
@@ -511,6 +743,18 @@ button {
   width: 100%;
   height: 380px;
   display: block;
+}
+
+.right-rail > .panel:first-child {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.right-rail > .panel:first-child .chord-svg {
+  flex: 1;
+  height: auto;
+  min-height: 320px;
 }
 
 .flow-network-summary {
@@ -564,7 +808,7 @@ button {
 
 @media (max-width: 1400px) {
   .dashboard-grid {
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: 290px minmax(0, 1fr);
   }
 
   .right-rail {
@@ -580,6 +824,8 @@ button {
 
   .app-header,
   .dashboard-grid,
+  .metrics-status-stage,
+  .status-summary-grid,
   .series-area,
   .right-rail {
     grid-template-columns: 1fr;
@@ -590,10 +836,15 @@ button {
   }
 
   .map-wrapper {
-    min-height: 420px;
+    height: 420px;
   }
 
   .scatter-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-list,
+  .metrics-status-stage .status-summary-grid {
     grid-template-columns: 1fr;
   }
 

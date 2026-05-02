@@ -133,9 +133,9 @@ export function ScatterPanel({
     <div className="panel chart-panel">
       <div className="panel-header">
         <div>
-          <h3>航次排放散点图</h3>
+          <h3>Voyage Emissions Scatter Plot</h3>
           <p>
-            先按起点港和终点港筛选，再点击单个航次点，地图只显示这一条船的实际航迹和理想航线。
+            Filter by origin and destination, then click a voyage point to show only that vessel's actual and ideal routes on the map.
           </p>
         </div>
         <div className="scatter-toolbar">
@@ -148,7 +148,7 @@ export function ScatterPanel({
             }}
             disabled={!originFilter && !destinationFilter}
           >
-            清空筛选
+            Clear Filters
           </button>
         </div>
       </div>
@@ -156,12 +156,12 @@ export function ScatterPanel({
         <div className="scatter-side">
           <div className="scatter-filters">
             <label className="scatter-filter">
-              <span>起点港口</span>
+              <span>Origin Port</span>
               <select
                 value={originFilter ?? ""}
                 onChange={(event) => onChangeOriginFilter(event.target.value || null)}
               >
-                <option value="">全部起点</option>
+                <option value="">All origins</option>
                 {originOptions.map((origin) => (
                   <option key={origin} value={origin}>
                     {origin}
@@ -170,14 +170,14 @@ export function ScatterPanel({
               </select>
             </label>
             <label className="scatter-filter">
-              <span>终点港口</span>
+              <span>Destination Port</span>
               <select
                 value={destinationFilter ?? ""}
                 onChange={(event) =>
                   onChangeDestinationFilter(event.target.value || null)
                 }
               >
-                <option value="">全部终点</option>
+                <option value="">All destinations</option>
                 {destinationOptions.map((destination) => (
                   <option key={destination} value={destination}>
                     {destination}
@@ -188,11 +188,10 @@ export function ScatterPanel({
           </div>
           <div className="scatter-side-card">
             <strong>
-              {originFilter ?? "全部起点"} {"->"} {destinationFilter ?? "全部终点"}
+              {originFilter ?? "All origins"} {"->"} {destinationFilter ?? "All destinations"}
             </strong>
-            <p>散点图会只显示当前筛选港口对下的航次。点中某个点后，地图才会加载这条船的完整 AIS 航迹。</p>
             <div className="scatter-count">
-              {items.length} / {totalCount} 条航次
+              {items.length} / {totalCount} voyages
             </div>
           </div>
         </div>

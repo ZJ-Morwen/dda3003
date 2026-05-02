@@ -1,6 +1,5 @@
 import type { EmissionSeriesPoint } from "../lib/api";
 import { cnNumber } from "../lib/format";
-import { Badge } from "./Badge";
 
 interface DetailPanelProps {
   point: EmissionSeriesPoint | null;
@@ -9,7 +8,7 @@ interface DetailPanelProps {
 export function DetailPanel({ point }: DetailPanelProps) {
   if (!point) {
     return (
-      <div className="panel">
+      <div className="panel detail-panel">
         <div className="panel-header">
           <h3>Point Detail</h3>
           <p>Click a scatter point, then click the map route or AIS points to inspect a moment.</p>
@@ -19,13 +18,14 @@ export function DetailPanel({ point }: DetailPanelProps) {
   }
 
   return (
-    <div className="panel">
+    <div className="panel detail-panel detail-panel-active">
       <div className="panel-header">
         <div>
-          <h3>Point Detail</h3>
-          <p>{point.ts.replace("T", " ").slice(0, 16)}</p>
+          <div className="detail-title-row">
+            <h3>Point Detail</h3>
+            <span>{point.ts.replace("T", " ").slice(0, 16)}</span>
+          </div>
         </div>
-        <Badge sourceType={point.sourceType} />
       </div>
       <div className="detail-grid">
         <div>

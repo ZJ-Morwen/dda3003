@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { metricDeltaLabel, sourceBadgeLabel } from "./format";
 
 describe("format helpers", () => {
-  it("formats source badges in Chinese", () => {
-    expect(sourceBadgeLabel("real")).toBe("真实");
-    expect(sourceBadgeLabel("derived")).toBe("推导");
-    expect(sourceBadgeLabel("mock")).toBe("模拟");
+  it("formats source badges in English", () => {
+    expect(sourceBadgeLabel("real")).toBe("Real");
+    expect(sourceBadgeLabel("derived")).toBe("Derived");
+    expect(sourceBadgeLabel("mock")).toBe("Mock");
   });
 
   it("formats positive delta values with sign", () => {

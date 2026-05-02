@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { ENVIRONMENT_LAYER_LABELS } from "../../../shared/contracts";
 import {
   getDashboardSnapshot,
   getEmissionSeries,
@@ -10,9 +9,7 @@ import {
   getRoute,
   recordAnimationCheck
 } from "./lib/api";
-import { Badge } from "./components/Badge";
 import { ChordPanel } from "./components/ChordPanel";
-import { DataCards } from "./components/DataCards";
 import { DetailPanel } from "./components/DetailPanel";
 import { MapPanel } from "./components/MapPanel";
 import { MetricsPanel } from "./components/MetricsPanel";
@@ -33,7 +30,6 @@ export default function App() {
     selectedVoyageId,
     selectedPortPair,
     selectedTimestamp,
-    dataSource,
     setEnvLayer,
     setSelectedVoyageId,
     setSelectedPortPair,
@@ -105,16 +101,6 @@ export default function App() {
       null,
     [emissionSeriesQuery.data?.points, selectedTimestamp]
   );
-
-  const networkSummary = useMemo(() => {
-    const ports = new Set(
-      snapshotQuery.data?.portFlows.flatMap((flow) => [flow.source, flow.target]) ?? []
-    );
-    return {
-      portCount: ports.size,
-      flowCount: snapshotQuery.data?.portFlows.length ?? 0
-    };
-  }, [snapshotQuery.data?.portFlows]);
 
   const scatterOriginOptions = useMemo(() => {
     const pool =
@@ -214,102 +200,11 @@ export default function App() {
       <header className="app-header">
         <div>
           <p className="eyebrow">AIS Visual Analytics WebApp</p>
-          <h1>多港口 AIS 航迹与排放可视化平台</h1>
-          <p className="subhead">
-            弦图始终保留全部港口和全部流向，散点图支持按起点港和终点港筛选。点击散点图中的单个航次点后，地图只显示这一条航次的实际 AIS 航迹和理想航线。
-          </p>
-        </div>
-        <div className="header-meta">
-          <div className="header-chip">
-            <span>当前航次</span>
-            <strong>{selectedVoyageId ?? "None"}</strong>
-          </div>
-          <div className="header-chip">
-            <span>港口网络</span>
-            <strong>
-              {networkSummary.portCount} 个港口 / {networkSummary.flowCount} 条流向
-            </strong>
-          </div>
-          {dataSource ? (
-            <div className="header-chip">
-              <span>数据来源</span>
-              <Badge sourceType={dataSource} />
-            </div>
-          ) : null}
+          <h1>Multi-Port AIS Route and Emissions Visualization Platform</h1>
         </div>
       </header>
 
-      <section className="dashboard-grid">
-        <aside className="left-rail">
-          <div className="panel">
-            <div className="panel-header">
-              <h3>环境图层</h3>
-              <p>切换地图上的海洋环境辅助图层。</p>
-            </div>
-            <div className="env-switches">
-              {MAP_ENVIRONMENT_LAYERS.map((layer) => (
-                <button
-                  key={layer}
-                  type="button"
-                  className={`env-pill ${envLayer === layer ? "active" : ""}`}
-                  onClick={() => setEnvLayer(layer)}
-                >
-                  {ENVIRONMENT_LAYER_LABELS[layer]}
-                </button>
-              ))}
-            </div>
-          </div>
-          <WeightsPanel snapshot={snapshotQuery.data} />
-        </aside>
-
-        <section className="center-stage">
-          <MapPanel
-            geometry={routeQuery.data ?? null}
-            environment={environmentQuery.data ?? null}
-            points={emissionSeriesQuery.data?.points ?? []}
-            voyageSourceType={emissionSeriesQuery.data?.sourceType ?? null}
-            environmentSourceType={environmentQuery.data?.sourceType ?? null}
-            selectedTimestamp={selectedTimestamp}
-            onSelectTimestamp={setSelectedTimestamp}
-            layerLabel={ENVIRONMENT_LAYER_LABELS[envLayer]}
-          />
-          <SeriesPanels
-            points={emissionSeriesQuery.data?.points ?? []}
-            sourceType={emissionSeriesQuery.data?.sourceType ?? null}
-            selectedTimestamp={selectedTimestamp}
-            onHoverTimestamp={setSelectedTimestamp}
-            onSelectTimestamp={setSelectedTimestamp}
-          />
-        </section>
-
-        <aside className="right-rail">
-          <ChordPanel
-            flows={snapshotQuery.data.portFlows}
-            selectedPortPair={selectedPortPair}
-            onSelect={(flow) => {
-              setSelectedPortPair([flow.source, flow.target]);
-            }}
-          />
-          <DataCards cards={snapshotQuery.data.dataDescription} />
-          <MetricsPanel metrics={metricsQuery.data ?? null} />
-          <DetailPanel point={activePoint} />
-          <div className="panel">
-            <div className="panel-header">
-              <h3>当前状态</h3>
-              <p>当前筛选和联动结果摘要。</p>
-            </div>
-            <ul className="status-list">
-              <li>当前航次数: {filteredScatter.length}</li>
-              <li>环境图层: {ENVIRONMENT_LAYER_LABELS[envLayer]}</li>
-              <li>累计排放差值: {cnNumber(activePoint?.deltaCumulative ?? 0)}</li>
-              <li>
-                港口对: {selectedPortPair ? `${selectedPortPair[0]} -> ${selectedPortPair[1]}` : "未选择"}
-              </li>
-            </ul>
-          </div>
-        </aside>
-      </section>
-      <section className="bottom-stage">
+      <section className="top-stage">
         <ScatterPanel
           items={filteredScatter}
           totalCount={snapshotQuery.data.scatter.length}
@@ -322,6 +217,73 @@ export default function App() {
           onChangeDestinationFilter={setScatterDestinationFilter}
           onSelect={(item) => setSelectedVoyageId(item.voyageId, item.sourceType)}
         />
+      </section>
+
+      <section className="dashboard-grid">
+        <aside className="left-rail">
+          <WeightsPanel snapshot={snapshotQuery.data} />
+          <SeriesPanels
+            points={emissionSeriesQuery.data?.points ?? []}
+            selectedTimestamp={selectedTimestamp}
+            onHoverTimestamp={setSelectedTimestamp}
+            onSelectTimestamp={setSelectedTimestamp}
+          />
+        </aside>
+
+        <section className="center-stage">
+          <MapPanel
+            geometry={routeQuery.data ?? null}
+            environment={environmentQuery.data ?? null}
+            points={emissionSeriesQuery.data?.points ?? []}
+            selectedTimestamp={selectedTimestamp}
+            onSelectTimestamp={setSelectedTimestamp}
+            environmentLayers={MAP_ENVIRONMENT_LAYERS}
+            currentEnvironmentLayer={envLayer}
+            onChangeEnvironmentLayer={setEnvLayer}
+          />
+        </section>
+
+        <aside className="right-rail">
+          <ChordPanel
+            flows={snapshotQuery.data.portFlows}
+            selectedPortPair={selectedPortPair}
+            onSelect={(flow) => {
+              setSelectedPortPair([flow.source, flow.target]);
+            }}
+          />
+          <DetailPanel point={activePoint} />
+        </aside>
+      </section>
+
+      <section className="metrics-status-stage">
+        <MetricsPanel metrics={metricsQuery.data ?? null} />
+        <div className="panel status-panel">
+          <div className="panel-header">
+            <h3>Current Status</h3>
+          </div>
+          <div className="status-summary-grid">
+            <div className="header-chip status-chip">
+              <span>Port Pair</span>
+              <strong>
+                {selectedPortPair
+                  ? `${selectedPortPair[0]} -> ${selectedPortPair[1]}`
+                  : "Not selected"}
+              </strong>
+            </div>
+            <div className="header-chip status-chip">
+              <span>Current Voyage</span>
+              <strong>{selectedVoyageId ?? "None"}</strong>
+            </div>
+            <div className="header-chip status-chip">
+              <span>Current Voyage Count</span>
+              <strong>{filteredScatter.length}</strong>
+            </div>
+            <div className="header-chip status-chip">
+              <span>Cumulative Emission Delta</span>
+              <strong>{cnNumber(activePoint?.deltaCumulative ?? 0)}</strong>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   );

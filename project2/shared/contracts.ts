@@ -207,13 +207,13 @@ export interface MetaLatestDatePayload {
 }
 
 export const ENVIRONMENT_LAYER_LABELS: Record<"wind" | "current" | "wave", string> = {
-  wind: "风场",
-  current: "洋流",
-  wave: "波浪"
+  wind: "Wind",
+  current: "Current",
+  wave: "Wave"
 };
 
 export const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
-  real: "真实数据",
-  derived: "推导数据",
-  mock: "模拟数据"
+  real: "Real Data",
+  derived: "Derived Data",
+  mock: "Mock Data"
 };

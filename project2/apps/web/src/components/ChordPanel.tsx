@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef } from "react";
 import * as d3 from "d3";
 
 import type { PortFlow } from "../../../../shared/contracts";
-import { Badge } from "./Badge";
 
 interface ChordPanelProps {
   flows: PortFlow[];
@@ -149,17 +148,17 @@ export function ChordPanel({ flows, selectedPortPair, onSelect }: ChordPanelProp
     <div className="panel">
       <div className="panel-header">
         <div>
-          <h3>港口流向弦图</h3>
+          <h3>Port Flow Chord Diagram</h3>
           <p>
-            当前显示全部港口和全部流向。点击某一条流时，只高亮该流并显示解释。
+            All ports and flows are shown. Click a flow to highlight it and view its explanation.
           </p>
         </div>
       </div>
       <div className="flow-network-summary">
         <div className="flow-network-meta">
-          <strong>{ports.length} 个港口</strong>
-          <span>{flows.length} 条流向</span>
-          <span>{totalVoyages} 条航次</span>
+          <strong>{ports.length} ports</strong>
+          <span>{flows.length} flows</span>
+          <span>{totalVoyages} voyages</span>
         </div>
         <div className="flow-port-list">
           {ports.map((port) => (
@@ -176,7 +175,6 @@ export function ChordPanel({ flows, selectedPortPair, onSelect }: ChordPanelProp
             <strong>
               {activeFlow.source} -&gt; {activeFlow.target}
             </strong>
-            <Badge sourceType={activeFlow.sourceType} />
           </div>
           <p>{activeFlow.description}</p>
         </div>

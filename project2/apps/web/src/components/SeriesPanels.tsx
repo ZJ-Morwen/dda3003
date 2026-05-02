@@ -1,13 +1,10 @@
 import type { EChartsOption } from "echarts";
-import type { SourceType } from "../../../../shared/contracts";
 import type { EmissionSeriesPoint } from "../lib/api";
 import { cnNumber } from "../lib/format";
-import { Badge } from "./Badge";
 import { EChart } from "./EChart";
 
 interface SeriesPanelsProps {
   points: EmissionSeriesPoint[];
-  sourceType: SourceType | null;
   selectedTimestamp: string | null;
   onHoverTimestamp: (timestamp: string | null) => void;
   onSelectTimestamp: (timestamp: string) => void;
@@ -72,7 +69,6 @@ function buildSeriesOption(
 
 export function SeriesPanels({
   points,
-  sourceType,
   selectedTimestamp,
   onHoverTimestamp,
   onSelectTimestamp
@@ -137,7 +133,6 @@ export function SeriesPanels({
             <h3>Emission Trend</h3>
             <p>Actual vs reference</p>
           </div>
-          {sourceType ? <Badge sourceType={sourceType} /> : null}
         </div>
         <EChart
           className="chart small-chart"
@@ -152,7 +147,6 @@ export function SeriesPanels({
             <h3>Speed Trend</h3>
             <p>Speed impact along the voyage</p>
           </div>
-          {sourceType ? <Badge sourceType={sourceType} /> : null}
         </div>
         <EChart
           className="chart small-chart"
@@ -167,7 +161,6 @@ export function SeriesPanels({
             <h3>Cumulative Delta</h3>
             <p>Current point Δ={cnNumber(activePoint?.deltaCumulative ?? 0)}</p>
           </div>
-          {sourceType ? <Badge sourceType={sourceType} /> : null}
         </div>
         <EChart className="chart small-chart" option={deltaOption} onEvents={commonEvents} />
       </div>

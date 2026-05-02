@@ -1,7 +1,6 @@
 import type { EChartsOption } from "echarts";
 
 import type { DashboardSnapshot } from "../lib/api";
-import { Badge } from "./Badge";
 import { EChart } from "./EChart";
 
 interface WeightsPanelProps {
@@ -46,7 +45,6 @@ export function WeightsPanel({ snapshot }: WeightsPanelProps) {
           <h3>Environment Mix</h3>
           <p>Support-layer weights used to provide voyage context on the map.</p>
         </div>
-        <Badge sourceType={weights.sourceType} />
       </div>
       <EChart className="chart compact-chart" option={option} />
     </div>

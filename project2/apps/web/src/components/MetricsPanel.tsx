@@ -1,6 +1,5 @@
 import type { RouteMetrics } from "../lib/api";
 import { cnNumber, metricDeltaLabel } from "../lib/format";
-import { Badge } from "./Badge";
 
 interface MetricsPanelProps {
   metrics: RouteMetrics | null;
@@ -9,10 +8,10 @@ interface MetricsPanelProps {
 export function MetricsPanel({ metrics }: MetricsPanelProps) {
   if (!metrics) {
     return (
-      <div className="panel">
+      <div className="panel metrics-panel">
         <div className="panel-header">
-          <h3>航线对比面板</h3>
-          <p>请选择航次查看实际航线与标准航线差异</p>
+          <h3>Route Comparison</h3>
+          <p>Select a voyage to compare the actual route with the reference route.</p>
         </div>
       </div>
     );
@@ -24,26 +23,25 @@ export function MetricsPanel({ metrics }: MetricsPanelProps) {
   );
 
   return (
-    <div className="panel">
+    <div className="panel metrics-panel">
       <div className="panel-header">
         <div>
-          <h3>航线对比面板</h3>
-          <p>当前航次 vs 标准参考线</p>
+          <h3>Route Comparison</h3>
+          <p>Current voyage vs reference route</p>
         </div>
-        <Badge sourceType={metrics.sourceType} />
       </div>
       <div className="metric-list">
         {metrics.items.map((item) => (
           <div key={item.metric} className="metric-item">
             <div className="metric-title">
-              <span>{item.label}</span>
-              <span>
+              <span className="metric-name">{item.label}</span>
+              <span className="metric-delta">
                 {metricDeltaLabel(item.delta)} {item.unit}
               </span>
             </div>
             <div className="metric-bars">
               <div>
-                <small>实际 {cnNumber(item.actual)}</small>
+                <small>Actual {cnNumber(item.actual)}</small>
                 <div className="metric-bar">
                   <span
                     style={{ width: `${(item.actual / maxValue) * 100}%` }}
@@ -52,7 +50,7 @@ export function MetricsPanel({ metrics }: MetricsPanelProps) {
                 </div>
               </div>
               <div>
-                <small>标准 {cnNumber(item.standard)}</small>
+                <small>Reference {cnNumber(item.standard)}</small>
                 <div className="metric-bar">
                   <span
                     style={{ width: `${(item.standard / maxValue) * 100}%` }}

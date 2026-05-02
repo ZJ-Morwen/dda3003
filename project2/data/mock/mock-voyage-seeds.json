@@ -1,7 +1,7 @@
 [
   {
     "voyageId": "mock-sha-nbo-01",
-    "label": "模拟航次 SHA-NBO-01",
+    "label": "Mock Voyage SHA-NBO-01",
     "source": "Shanghai",
     "target": "Ningbo",
     "startTs": "2025-09-25T08:00:00+08:00",
@@ -17,7 +17,7 @@
   },
   {
     "voyageId": "mock-sha-nbo-02",
-    "label": "模拟航次 SHA-NBO-02",
+    "label": "Mock Voyage SHA-NBO-02",
     "source": "Shanghai",
     "target": "Ningbo",
     "startTs": "2025-09-28T10:20:00+08:00",
@@ -33,7 +33,7 @@
   },
   {
     "voyageId": "mock-nbo-szx-01",
-    "label": "模拟航次 NBO-SZX-01",
+    "label": "Mock Voyage NBO-SZX-01",
     "source": "Ningbo",
     "target": "Shenzhen",
     "startTs": "2025-09-24T06:40:00+08:00",
@@ -51,7 +51,7 @@
   },
   {
     "voyageId": "mock-nbo-szx-02",
-    "label": "模拟航次 NBO-SZX-02",
+    "label": "Mock Voyage NBO-SZX-02",
     "source": "Ningbo",
     "target": "Shenzhen",
     "startTs": "2025-09-29T12:30:00+08:00",
@@ -69,7 +69,7 @@
   },
   {
     "voyageId": "mock-qdg-sha-01",
-    "label": "模拟航次 QDG-SHA-01",
+    "label": "Mock Voyage QDG-SHA-01",
     "source": "Qingdao",
     "target": "Shanghai",
     "startTs": "2025-09-27T07:10:00+08:00",
@@ -86,7 +86,7 @@
   },
   {
     "voyageId": "mock-tjn-sha-01",
-    "label": "模拟航次 TJN-SHA-01",
+    "label": "Mock Voyage TJN-SHA-01",
     "source": "Tianjin",
     "target": "Shanghai",
     "startTs": "2025-09-26T05:30:00+08:00",
@@ -104,7 +104,7 @@
   },
   {
     "voyageId": "mock-qdg-szx-01",
-    "label": "模拟航次 QDG-SZX-01",
+    "label": "Mock Voyage QDG-SZX-01",
     "source": "Qingdao",
     "target": "Shenzhen",
     "startTs": "2025-09-23T04:50:00+08:00",
@@ -123,7 +123,7 @@
   },
   {
     "voyageId": "mock-szx-sha-01",
-    "label": "模拟航次 SZX-SHA-01",
+    "label": "Mock Voyage SZX-SHA-01",
     "source": "Shenzhen",
     "target": "Shanghai",
     "startTs": "2025-09-30T09:00:00+08:00",
@@ -141,7 +141,7 @@
   },
   {
     "voyageId": "mock-qdg-nbo-01",
-    "label": "模拟航次 QDG-NBO-01",
+    "label": "Mock Voyage QDG-NBO-01",
     "source": "Qingdao",
     "target": "Ningbo",
     "startTs": "2025-09-29T08:40:00+08:00",
@@ -158,7 +158,7 @@
   },
   {
     "voyageId": "mock-tjn-szx-01",
-    "label": "模拟航次 TJN-SZX-01",
+    "label": "Mock Voyage TJN-SZX-01",
     "source": "Tianjin",
     "target": "Shenzhen",
     "startTs": "2025-09-22T03:30:00+08:00",

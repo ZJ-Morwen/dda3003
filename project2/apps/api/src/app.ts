@@ -48,7 +48,7 @@ export async function buildApp() {
     const query = request.query as { startDate?: string; endDate?: string; startTs?: string; endTs?: string; ts?: string };
     const payload = await getVoyageRoute(params.voyageId, query.startTs ?? query.startDate, query.endTs ?? query.endDate, query.ts);
     if (!payload) {
-      notFound(reply, "航次不存在或当前时间范围无航线数据。");
+      notFound(reply, "Voyage not found or no route data is available for the selected time range.");
       return;
     }
     return payload;
@@ -59,7 +59,7 @@ export async function buildApp() {
     const query = request.query as { startDate?: string; endDate?: string; startTs?: string; endTs?: string };
     const payload = await getVoyageEmissionSeries(params.voyageId, query.startTs ?? query.startDate, query.endTs ?? query.endDate);
     if (!payload) {
-      notFound(reply, "航次不存在或当前时间范围无排放数据。");
+      notFound(reply, "Voyage not found or no emissions data is available for the selected time range.");
       return;
     }
     return payload;
@@ -70,7 +70,7 @@ export async function buildApp() {
     const query = request.query as { startDate?: string; endDate?: string; startTs?: string; endTs?: string };
     const payload = await getVoyageMetrics(params.voyageId, query.startTs ?? query.startDate, query.endTs ?? query.endDate);
     if (!payload) {
-      notFound(reply, "航次不存在或当前时间范围无指标数据。");
+      notFound(reply, "Voyage not found or no metrics data is available for the selected time range.");
       return;
     }
     return payload;

@@ -13,7 +13,7 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init);
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error((payload as { message?: string }).message ?? "请求失败");
+    throw new Error((payload as { message?: string }).message ?? "Request failed");
   }
   if (response.status === 204) {
     return undefined as T;

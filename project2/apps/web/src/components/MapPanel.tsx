@@ -1,35 +1,34 @@
 import { useMemo } from "react";
 
-import type { SourceType } from "../../../../shared/contracts";
+import { ENVIRONMENT_LAYER_LABELS } from "../../../../shared/contracts";
 import type {
   EmissionSeriesPoint,
   EnvironmentFieldPayload,
   RouteGeometryPayload
 } from "../lib/api";
 import { cnNumber } from "../lib/format";
-import { Badge } from "./Badge";
 import MarineMap from "./MarineMap";
 
 interface MapPanelProps {
   geometry: RouteGeometryPayload | null;
   environment: EnvironmentFieldPayload | null;
   points: EmissionSeriesPoint[];
-  voyageSourceType: SourceType | null;
-  environmentSourceType: SourceType | null;
   selectedTimestamp: string | null;
   onSelectTimestamp: (timestamp: string) => void;
-  layerLabel: string;
+  environmentLayers: readonly EnvironmentFieldPayload["layer"][];
+  currentEnvironmentLayer: EnvironmentFieldPayload["layer"];
+  onChangeEnvironmentLayer: (layer: EnvironmentFieldPayload["layer"]) => void;
 }
 
 export function MapPanel({
   geometry,
   environment,
   points,
-  voyageSourceType,
-  environmentSourceType,
   selectedTimestamp,
   onSelectTimestamp,
-  layerLabel
+  environmentLayers,
+  currentEnvironmentLayer,
+  onChangeEnvironmentLayer
 }: MapPanelProps) {
   const activePoint = useMemo(
     () => points.find((point) => point.ts === selectedTimestamp) ?? points[0] ?? null,
@@ -39,20 +38,29 @@ export function MapPanel({
   const mapMode = environment?.layer === "current" ? "current" : "wind";
 
   return (
-    <div
-      className="panel map-shell"
-      style={{ display: "flex", flexDirection: "column", height: "100%" }}
-    >
+    <div className="panel map-shell">
       <div className="panel-header">
         <div>
-          <h3>航迹地图</h3>
+          <div className="map-title-row">
+            <h3>Route Map</h3>
+            <div className="env-switches map-env-switches">
+              {environmentLayers.map((layer) => (
+                <button
+                  key={layer}
+                  type="button"
+                  className={`env-pill ${currentEnvironmentLayer === layer ? "active" : ""}`}
+                  onClick={() => onChangeEnvironmentLayer(layer)}
+                >
+                  {ENVIRONMENT_LAYER_LABELS[layer]}
+                </button>
+              ))}
+            </div>
+          </div>
           <p>
-            这里始终只显示当前选中的一条航次，并且加载这条船的完整 AIS 航迹和对应理想航线。
+            This view shows only the selected voyage, with the vessel's full AIS route and matching ideal route.
           </p>
         </div>
         <div className="map-header-right">
-          {voyageSourceType ? <Badge sourceType={voyageSourceType} /> : null}
-          {environmentSourceType ? <Badge sourceType={environmentSourceType} /> : null}
           {points.length > 0 ? <span className="map-caption">AIS points: {points.length}</span> : null}
           {activePoint ? (
             <span className="map-caption">
@@ -61,7 +69,7 @@ export function MapPanel({
           ) : null}
         </div>
       </div>
-      <div className="map-wrapper" style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+      <div className="map-wrapper">
         <MarineMap
           mode={mapMode}
           geometry={geometry}

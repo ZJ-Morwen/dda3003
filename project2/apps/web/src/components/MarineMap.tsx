@@ -22,6 +22,7 @@ const PORT_VIEW_BOUNDS = [
   [19.5, 111.2],
   [41.0, 125.2]
 ] as const;
+const DEFAULT_ZOOM_OUT_STEP = 0.5;
 
 const PORT_LOCATIONS = [
   {
@@ -147,6 +148,7 @@ const MarineMap: React.FC<MarineMapProps> = ({ mode, geometry, points, onSelectT
     });
 
     map.fitBounds(PORT_VIEW_BOUNDS, { animate: false, padding: [16, 16] });
+    map.setZoom(map.getZoom() - DEFAULT_ZOOM_OUT_STEP, { animate: false });
     map.setMinZoom(map.getZoom());
     window.L.control.zoom({ position: "topright" }).addTo(map);
     canvasRendererRef.current = window.L.canvas({ padding: 0.5 });
@@ -326,6 +328,7 @@ const MarineMap: React.FC<MarineMapProps> = ({ mode, geometry, points, onSelectT
     const bounds = routeGroup.getBounds?.();
     if (bounds && bounds.isValid()) {
       map.fitBounds(bounds, { padding: [70, 70], animate: false, maxZoom: 8 });
+      map.setZoom(map.getZoom() - DEFAULT_ZOOM_OUT_STEP, { animate: false });
     }
   }, [geometry]);
 

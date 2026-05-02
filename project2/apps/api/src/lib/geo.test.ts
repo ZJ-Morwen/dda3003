@@ -32,7 +32,7 @@ describe("geo and dataset helpers", () => {
       [
         {
           voyageId: "mock-1",
-          label: "模拟 1",
+          label: "Mock 1",
           source: "Shanghai",
           target: "Ningbo",
           startTs: "2025-09-25T08:00:00+08:00",
