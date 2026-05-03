@@ -4,23 +4,26 @@ import type { DashboardSnapshot } from "../lib/api";
 import { EChart } from "./EChart";
 
 interface WeightsPanelProps {
-  snapshot: DashboardSnapshot;
+  weights: DashboardSnapshot["weights"];
 }
 
-export function WeightsPanel({ snapshot }: WeightsPanelProps) {
-  const { weights } = snapshot;
+export function WeightsPanel({ weights }: WeightsPanelProps) {
 
   const option: EChartsOption = {
     tooltip: { trigger: "item" },
     legend: {
-      bottom: 0,
+      top: "84%",
+      left: "46%",
+      itemWidth: 18,
+      itemHeight: 10,
       textStyle: { color: "#d2e6ff" }
     },
     series: [
       {
         type: "pie",
-        radius: ["45%", "72%"],
-        avoidLabelOverlap: false,
+        radius: ["34%", "55%"],
+        center: ["46%", "42%"],
+        avoidLabelOverlap: true,
         itemStyle: {
           borderColor: "#081521",
           borderWidth: 4
@@ -28,6 +31,10 @@ export function WeightsPanel({ snapshot }: WeightsPanelProps) {
         label: {
           color: "#f2fbff",
           formatter: "{b}\n{d}%"
+        },
+        labelLine: {
+          length: 10,
+          length2: 14
         },
         data: [
           { name: "Wind", value: weights.weights.wind, itemStyle: { color: "#7ed0ff" } },
@@ -43,7 +50,7 @@ export function WeightsPanel({ snapshot }: WeightsPanelProps) {
       <div className="panel-header">
         <div>
           <h3>Environment Mix</h3>
-          <p>Support-layer weights used to provide voyage context on the map.</p>
+          <p>Relative influence of wind, current, and wave</p>
         </div>
       </div>
       <EChart className="chart compact-chart" option={option} />

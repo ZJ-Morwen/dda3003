@@ -33,7 +33,7 @@ export function DetailPanel({ point }: DetailPanelProps) {
           <p>
             Position: {cnNumber(point.lat, 3)}N, {cnNumber(point.lon, 3)}E
           </p>
-          <p>Speed: {cnNumber(point.actualSpeed, 2)} knots</p>
+          <p>Speed: {cnNumber(point.actualSpeed, 4)} knots</p>
           <p>Emission: {cnNumber(point.actualEmission, 2)}</p>
         </div>
         <div>
@@ -41,7 +41,7 @@ export function DetailPanel({ point }: DetailPanelProps) {
           <p>
             Position: {cnNumber(point.refLat, 3)}N, {cnNumber(point.refLon, 3)}E
           </p>
-          <p>Speed: {cnNumber(point.standardSpeed, 2)} knots</p>
+          <p>Speed: {cnNumber(point.standardSpeed, 4)} knots</p>
           <p>Emission: {cnNumber(point.standardEmission, 2)}</p>
         </div>
         <div>

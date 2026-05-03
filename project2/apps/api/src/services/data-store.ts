@@ -71,6 +71,7 @@ const CHECK_ANIMATION_PATH = projectPath(
 
 let datasetPromise: Promise<CompositeDataset> | null = null;
 let datasetVersion = "";
+type EnvironmentLayer = "wind" | "current" | "wave";
 
 function getDatasetTimeRange(real: RealDataset): { startTs: string; endTs: string } {
   return (
@@ -227,6 +228,97 @@ function buildScatter(voyages: DatasetVoyage[], timeFilter: TimeFilter): Scatter
     }));
 }
 
+function getEnvironmentVectorAtPoint(
+  dataset: CompositeDataset,
+  layer: EnvironmentLayer,
+  lon: number,
+  lat: number,
+  ts: string
+): { u: number; v: number; intensity: number } {
+  const config = dataset.environmentSeeds.layers[layer];
+  const [minLon, minLat, maxLon, maxLat] = dataset.environmentSeeds.bounds;
+  const xNorm = (lon - minLon) / Math.max(maxLon - minLon, 0.0001);
+  const yNorm = (lat - minLat) / Math.max(maxLat - minLat, 0.0001);
+  const x = Math.min(1, Math.max(0, xNorm));
+  const y = Math.min(1, Math.max(0, yNorm));
+  const phase = new Date(ts).getTime() / 3_600_000;
+  const angle =
+    config.frequency * (x + y + phase * 0.05) +
+    config.swirl * Math.sin(phase * 0.1 + y * 5.6);
+  const intensity =
+    config.amplitude *
+    (0.55 + 0.45 * Math.sin(phase * 0.08 + x * 7.2 - y * 3.2));
+
+  return {
+    u: (config.biasX + Math.cos(angle)) * intensity,
+    v: (config.biasY + Math.sin(angle)) * intensity,
+    intensity: Math.abs(intensity)
+  };
+}
+
+function normalizeEnvironmentWeights(
+  totals: Record<EnvironmentLayer, number>,
+  computedAt: string
+): EnvironmentWeightsPayloadInternal {
+  const safe = {
+    wind: Math.max(0.001, totals.wind),
+    current: Math.max(0.001, totals.current),
+    wave: Math.max(0.001, totals.wave)
+  };
+  const total = safe.wind + safe.current + safe.wave;
+
+  return {
+    weights: {
+      wind: round(safe.wind / total, 3),
+      current: round(safe.current / total, 3),
+      wave: round(safe.wave / total, 3)
+    },
+    normalized: true,
+    computedAt,
+    sourceType: "derived"
+  };
+}
+
+function computeEnvironmentWeightsFromSeries(
+  dataset: CompositeDataset,
+  series: EmissionSeriesPoint[],
+  computedAt: string
+): EnvironmentWeightsPayloadInternal {
+  const totals: Record<EnvironmentLayer, number> = {
+    wind: 0,
+    current: 0,
+    wave: 0
+  };
+
+  for (let index = 1; index < series.length; index += 1) {
+    const previous = series[index - 1];
+    const point = series[index];
+    const segmentDistance = haversineNm(previous.lat, previous.lon, point.lat, point.lon);
+    if (segmentDistance <= 0) {
+      continue;
+    }
+
+    const routeDx = point.lon - previous.lon;
+    const routeDy = point.lat - previous.lat;
+    const routeMagnitude = Math.hypot(routeDx, routeDy) || 1;
+    const speedDeviationFactor =
+      1 + Math.min(Math.abs(point.actualSpeed - point.standardSpeed) / Math.max(point.standardSpeed, 1), 1.5);
+
+    (["wind", "current", "wave"] as const).forEach((layer) => {
+      const vector = getEnvironmentVectorAtPoint(dataset, layer, point.lon, point.lat, point.ts);
+      const vectorMagnitude = Math.hypot(vector.u, vector.v);
+      const alignment =
+        vectorMagnitude > 0
+          ? Math.abs((routeDx * vector.u + routeDy * vector.v) / (routeMagnitude * vectorMagnitude))
+          : 0;
+      const directionalFactor = layer === "wave" ? 0.85 + 0.15 * alignment : 0.35 + 0.65 * alignment;
+      totals[layer] += segmentDistance * (vector.intensity + vectorMagnitude) * directionalFactor * speedDeviationFactor;
+    });
+  }
+
+  return normalizeEnvironmentWeights(totals, computedAt);
+}
+
 function seededWeights(startDay: string, endDay: string): EnvironmentWeightsPayloadInternal {
   const key = `${startDay}:${endDay}`;
   const phase = [...key].reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 3), 0);
@@ -251,6 +343,22 @@ function seededWeights(startDay: string, endDay: string): EnvironmentWeightsPayl
     computedAt: endDay,
     sourceType: "mock"
   };
+}
+
+async function computeVoyageEnvironmentWeights(
+  dataset: CompositeDataset,
+  voyageId: string,
+  timeFilter: TimeFilter
+): Promise<EnvironmentWeightsPayloadInternal | null> {
+  const voyage = await loadVoyageForDetail(dataset, voyageId);
+  if (!voyage?.series) {
+    return null;
+  }
+  const slice = getSlice(voyage.series, timeFilter);
+  if (slice.length < 2) {
+    return null;
+  }
+  return computeEnvironmentWeightsFromSeries(dataset, slice, slice[slice.length - 1].ts);
 }
 
 function buildPortFlows(dataset: CompositeDataset, timeFilter: TimeFilter): PortFlow[] {
@@ -294,8 +402,9 @@ function buildDataDescription(dataset: CompositeDataset, timeFilter: TimeFilter)
     },
     {
       title: "Reference Route Model",
-      value: "Median speed profile",
-      detail: "Derived from real voyages grouped by origin and destination ports.",
+      value: "AIS eco-corridor model",
+      detail:
+        "Derived from lower-emission historical voyages on the same port pair, then constrained to remain close to the observed AIS route.",
       sourceType: "derived"
     },
     {
@@ -585,12 +694,22 @@ export async function getVoyageMetrics(
 
 export async function getEnvironmentWeights(
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  voyageId?: string
 ): Promise<EnvironmentWeightsPayloadInternal> {
   const dataset = await getDataset();
   const { startTs: minTs, endTs: maxTs } = getDatasetTimeRange(dataset.real);
   const startDay = normalizeTimeInput(startDate, minTs);
   const endDay = normalizeTimeInput(endDate, maxTs);
+  const timeFilter = buildTimeFilter(startDay, endDay);
+
+  if (voyageId) {
+    const weights = await computeVoyageEnvironmentWeights(dataset, voyageId, timeFilter);
+    if (weights) {
+      return weights;
+    }
+  }
+
   return seededWeights(startDay, endDay);
 }
 

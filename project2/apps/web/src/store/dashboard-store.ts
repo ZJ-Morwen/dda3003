@@ -8,6 +8,8 @@ interface DashboardState {
   selectedVoyageId: string | null;
   selectedPortPair: [string, string] | null;
   selectedTimestamp: string | null;
+  selectedTimeRange: { startTs: string; endTs: string } | null;
+  pendingRangeStart: string | null;
   dataSource: SourceType | null;
   initialized: boolean;
   setTimeFilter: (timeFilter: TimeFilter) => void;
@@ -15,6 +17,8 @@ interface DashboardState {
   setSelectedVoyageId: (voyageId: string | null, sourceType?: SourceType | null) => void;
   setSelectedPortPair: (pair: [string, string] | null) => void;
   setSelectedTimestamp: (timestamp: string | null) => void;
+  setSelectedTimeRange: (range: { startTs: string; endTs: string } | null) => void;
+  setPendingRangeStart: (timestamp: string | null) => void;
   setInitialized: (value: boolean) => void;
 }
 
@@ -24,6 +28,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   selectedVoyageId: null,
   selectedPortPair: null,
   selectedTimestamp: null,
+  selectedTimeRange: null,
+  pendingRangeStart: null,
   dataSource: null,
   initialized: false,
   setTimeFilter: (timeFilter) =>
@@ -31,6 +37,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       timeFilter,
       selectedVoyageId: null,
       selectedTimestamp: null,
+      selectedTimeRange: null,
+      pendingRangeStart: null,
       selectedPortPair: null,
       dataSource: null
     }),
@@ -39,9 +47,13 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     set({
       selectedVoyageId,
       dataSource,
-      selectedTimestamp: null
+      selectedTimestamp: null,
+      selectedTimeRange: null,
+      pendingRangeStart: null
     }),
   setSelectedPortPair: (selectedPortPair) => set({ selectedPortPair }),
   setSelectedTimestamp: (selectedTimestamp) => set({ selectedTimestamp }),
+  setSelectedTimeRange: (selectedTimeRange) => set({ selectedTimeRange }),
+  setPendingRangeStart: (pendingRangeStart) => set({ pendingRangeStart }),
   setInitialized: (initialized) => set({ initialized })
 }));

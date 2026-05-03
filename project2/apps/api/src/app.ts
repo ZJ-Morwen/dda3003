@@ -88,8 +88,18 @@ export async function buildApp() {
   });
 
   app.get("/api/environment/weights", async (request) => {
-    const query = request.query as { startDate?: string; endDate?: string; startTs?: string; endTs?: string };
-    return getEnvironmentWeights(query.startTs ?? query.startDate, query.endTs ?? query.endDate);
+    const query = request.query as {
+      startDate?: string;
+      endDate?: string;
+      startTs?: string;
+      endTs?: string;
+      voyageId?: string;
+    };
+    return getEnvironmentWeights(
+      query.startTs ?? query.startDate,
+      query.endTs ?? query.endDate,
+      query.voyageId
+    );
   });
 
   app.get("/api/environment/layers/:layer", async (request) => {

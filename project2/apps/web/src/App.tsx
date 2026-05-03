@@ -5,6 +5,7 @@ import {
   getDashboardSnapshot,
   getEmissionSeries,
   getEnvironmentLayer,
+  getEnvironmentWeights,
   getMetrics,
   getRoute,
   recordAnimationCheck
@@ -20,6 +21,17 @@ import { cnNumber } from "./lib/format";
 import { useDashboardStore } from "./store/dashboard-store";
 
 const MAP_ENVIRONMENT_LAYERS = ["wind", "current"] as const;
+const EXCLUDED_PORT_PAIRS: Array<[string, string]> = [
+  ["Qingdao", "Tianjin"],
+  ["Tianjin", "Qingdao"]
+];
+
+function isExcludedPortPair(source: string, target: string): boolean {
+  return EXCLUDED_PORT_PAIRS.some(
+    ([excludedSource, excludedTarget]) =>
+      source === excludedSource && target === excludedTarget
+  );
+}
 
 export default function App() {
   const [scatterOriginFilter, setScatterOriginFilter] = useState<string | null>(null);
@@ -30,10 +42,14 @@ export default function App() {
     selectedVoyageId,
     selectedPortPair,
     selectedTimestamp,
+    selectedTimeRange,
+    pendingRangeStart,
     setEnvLayer,
     setSelectedVoyageId,
     setSelectedPortPair,
-    setSelectedTimestamp
+    setSelectedTimestamp,
+    setSelectedTimeRange,
+    setPendingRangeStart
   } = useDashboardStore();
 
   const snapshotQuery = useQuery({
@@ -57,9 +73,9 @@ export default function App() {
     "2025-01-01T00:00:00.000Z";
 
   const routeQuery = useQuery({
-    queryKey: ["route", selectedVoyageId, activeTs],
+    queryKey: ["route", selectedVoyageId],
     enabled: Boolean(selectedVoyageId),
-    queryFn: () => getRoute(selectedVoyageId!, { ts: activeTs ?? undefined })
+    queryFn: () => getRoute(selectedVoyageId!)
   });
 
   const metricsQuery = useQuery({
@@ -72,6 +88,16 @@ export default function App() {
     queryKey: ["environment-layer", envLayer, environmentTs],
     enabled: Boolean(snapshotQuery.data),
     queryFn: () => getEnvironmentLayer(envLayer, environmentTs)
+  });
+
+  const environmentWeightsQuery = useQuery({
+    queryKey: ["environment-weights", selectedVoyageId, snapshotQuery.data?.timeFilter],
+    enabled: Boolean(snapshotQuery.data),
+    queryFn: () =>
+      getEnvironmentWeights({
+        voyageId: selectedVoyageId ?? undefined,
+        timeFilter: snapshotQuery.data?.timeFilter
+      })
   });
 
   useEffect(() => {
@@ -102,36 +128,96 @@ export default function App() {
     [emissionSeriesQuery.data?.points, selectedTimestamp]
   );
 
+  const visibleScatter = useMemo(
+    () =>
+      snapshotQuery.data?.scatter.filter(
+        (item) => !isExcludedPortPair(item.origin, item.destination)
+      ) ?? [],
+    [snapshotQuery.data?.scatter]
+  );
+
+  const visiblePortFlows = useMemo(
+    () =>
+      snapshotQuery.data?.portFlows.filter(
+        (flow) => !isExcludedPortPair(flow.source, flow.target)
+      ) ?? [],
+    [snapshotQuery.data?.portFlows]
+  );
+
   const scatterOriginOptions = useMemo(() => {
     const pool =
-      snapshotQuery.data?.scatter.filter(
+      visibleScatter.filter(
         (item) =>
           !scatterDestinationFilter || item.destination === scatterDestinationFilter
-      ) ?? [];
+      );
     return [...new Set(pool.map((item) => item.origin))].sort((left, right) =>
       left.localeCompare(right)
     );
-  }, [scatterDestinationFilter, snapshotQuery.data?.scatter]);
+  }, [scatterDestinationFilter, visibleScatter]);
 
   const scatterDestinationOptions = useMemo(() => {
     const pool =
-      snapshotQuery.data?.scatter.filter(
+      visibleScatter.filter(
         (item) => !scatterOriginFilter || item.origin === scatterOriginFilter
-      ) ?? [];
+      );
     return [...new Set(pool.map((item) => item.destination))].sort((left, right) =>
       left.localeCompare(right)
     );
-  }, [scatterOriginFilter, snapshotQuery.data?.scatter]);
+  }, [scatterOriginFilter, visibleScatter]);
 
   const filteredScatter = useMemo(
     () =>
-      snapshotQuery.data?.scatter.filter(
+      visibleScatter.filter(
         (item) =>
           (!scatterOriginFilter || item.origin === scatterOriginFilter) &&
           (!scatterDestinationFilter || item.destination === scatterDestinationFilter)
-      ) ?? [],
-    [scatterDestinationFilter, scatterOriginFilter, snapshotQuery.data?.scatter]
+      ),
+    [scatterDestinationFilter, scatterOriginFilter, visibleScatter]
   );
+
+  useEffect(() => {
+    if (
+      selectedPortPair &&
+      isExcludedPortPair(selectedPortPair[0], selectedPortPair[1])
+    ) {
+      setSelectedPortPair(null);
+    }
+  }, [selectedPortPair, setSelectedPortPair]);
+
+  const handleSelectTimestamp = (timestamp: string) => {
+    setSelectedTimestamp(timestamp);
+
+    if (selectedTimeRange) {
+      setSelectedTimeRange(null);
+      setPendingRangeStart(timestamp);
+      return;
+    }
+
+    if (!pendingRangeStart) {
+      setPendingRangeStart(timestamp);
+      return;
+    }
+
+    if (pendingRangeStart === timestamp) {
+      setPendingRangeStart(null);
+      return;
+    }
+
+    const startMs = new Date(pendingRangeStart).getTime();
+    const endMs = new Date(timestamp).getTime();
+    const [startTs, endTs] =
+      startMs <= endMs
+        ? [pendingRangeStart, timestamp]
+        : [timestamp, pendingRangeStart];
+
+    setSelectedTimeRange({ startTs, endTs });
+    setPendingRangeStart(null);
+  };
+
+  const handleClearTimeRange = () => {
+    setSelectedTimeRange(null);
+    setPendingRangeStart(null);
+  };
 
   useEffect(() => {
     if (!selectedPortPair) return;
@@ -207,7 +293,7 @@ export default function App() {
       <section className="top-stage">
         <ScatterPanel
           items={filteredScatter}
-          totalCount={snapshotQuery.data.scatter.length}
+          totalCount={visibleScatter.length}
           selectedVoyageId={selectedVoyageId}
           originFilter={scatterOriginFilter}
           destinationFilter={scatterDestinationFilter}
@@ -221,12 +307,14 @@ export default function App() {
 
       <section className="dashboard-grid">
         <aside className="left-rail">
-          <WeightsPanel snapshot={snapshotQuery.data} />
+          <WeightsPanel weights={environmentWeightsQuery.data ?? snapshotQuery.data.weights} />
           <SeriesPanels
             points={emissionSeriesQuery.data?.points ?? []}
             selectedTimestamp={selectedTimestamp}
-            onHoverTimestamp={setSelectedTimestamp}
-            onSelectTimestamp={setSelectedTimestamp}
+            selectedTimeRange={selectedTimeRange}
+            pendingRangeStart={pendingRangeStart}
+            onSelectTimestamp={handleSelectTimestamp}
+            onClearTimeRange={handleClearTimeRange}
           />
         </aside>
 
@@ -236,7 +324,8 @@ export default function App() {
             environment={environmentQuery.data ?? null}
             points={emissionSeriesQuery.data?.points ?? []}
             selectedTimestamp={selectedTimestamp}
-            onSelectTimestamp={setSelectedTimestamp}
+            selectedTimeRange={selectedTimeRange}
+            onSelectTimestamp={handleSelectTimestamp}
             environmentLayers={MAP_ENVIRONMENT_LAYERS}
             currentEnvironmentLayer={envLayer}
             onChangeEnvironmentLayer={setEnvLayer}
@@ -245,7 +334,7 @@ export default function App() {
 
         <aside className="right-rail">
           <ChordPanel
-            flows={snapshotQuery.data.portFlows}
+            flows={visiblePortFlows}
             selectedPortPair={selectedPortPair}
             onSelect={(flow) => {
               setSelectedPortPair([flow.source, flow.target]);

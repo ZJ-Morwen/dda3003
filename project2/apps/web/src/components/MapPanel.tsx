@@ -14,6 +14,7 @@ interface MapPanelProps {
   environment: EnvironmentFieldPayload | null;
   points: EmissionSeriesPoint[];
   selectedTimestamp: string | null;
+  selectedTimeRange: { startTs: string; endTs: string } | null;
   onSelectTimestamp: (timestamp: string) => void;
   environmentLayers: readonly EnvironmentFieldPayload["layer"][];
   currentEnvironmentLayer: EnvironmentFieldPayload["layer"];
@@ -25,6 +26,7 @@ export function MapPanel({
   environment,
   points,
   selectedTimestamp,
+  selectedTimeRange,
   onSelectTimestamp,
   environmentLayers,
   currentEnvironmentLayer,
@@ -67,6 +69,12 @@ export function MapPanel({
               {activePoint.ts.slice(5, 16).replace("T", " ")} | {cnNumber(activePoint.actualSpeed, 1)} kn
             </span>
           ) : null}
+          {selectedTimeRange ? (
+            <span className="map-caption">
+              Interval: {selectedTimeRange.startTs.slice(5, 16).replace("T", " ")} -{" "}
+              {selectedTimeRange.endTs.slice(5, 16).replace("T", " ")}
+            </span>
+          ) : null}
         </div>
       </div>
       <div className="map-wrapper">
@@ -74,6 +82,7 @@ export function MapPanel({
           mode={mapMode}
           geometry={geometry}
           points={points}
+          selectedTimeRange={selectedTimeRange}
           onSelectTimestamp={onSelectTimestamp}
         />
       </div>

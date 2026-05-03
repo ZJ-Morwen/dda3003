@@ -78,19 +78,21 @@ export function ChordPanel({ flows, selectedPortPair, onSelect }: ChordPanelProp
       .data(chord.groups)
       .join("text")
       .attr("transform", (group) => {
-        const angle = (group.startAngle + group.endAngle) / 2 - Math.PI / 2;
-        const x = Math.cos(angle) * (outerRadius + 20);
-        const y = Math.sin(angle) * (outerRadius + 20);
+        const midAngle = (group.startAngle + group.endAngle) / 2;
+        const radius = innerRadius + (outerRadius - innerRadius) * 0.58;
+        const x = Math.cos(midAngle - Math.PI / 2) * radius;
+        const y = Math.sin(midAngle - Math.PI / 2) * radius;
         return `translate(${x},${y})`;
       })
-      .attr("text-anchor", (group) => {
-        const angle = (group.startAngle + group.endAngle) / 2 - Math.PI / 2;
-        return Math.cos(angle) >= 0 ? "start" : "end";
-      })
+      .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
-      .attr("fill", "#d9f2ff")
+      .attr("fill", "#f8fdff")
+      .attr("stroke", "rgba(7,16,25,0.92)")
+      .attr("stroke-width", 3)
+      .attr("paint-order", "stroke")
+      .attr("stroke-linejoin", "round")
       .attr("font-size", 11)
-      .attr("font-weight", 600)
+      .attr("font-weight", 700)
       .text((group) => ports[group.index]);
 
     root
@@ -149,9 +151,6 @@ export function ChordPanel({ flows, selectedPortPair, onSelect }: ChordPanelProp
       <div className="panel-header">
         <div>
           <h3>Port Flow Chord Diagram</h3>
-          <p>
-            All ports and flows are shown. Click a flow to highlight it and view its explanation.
-          </p>
         </div>
       </div>
       <div className="flow-network-summary">

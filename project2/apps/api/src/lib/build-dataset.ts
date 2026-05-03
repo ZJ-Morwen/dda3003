@@ -63,6 +63,12 @@ interface BuildVoyageInput {
   track: TrackPointInput[];
   referenceRoute?: [number, number][];
   referenceSpeedProfile?: number[];
+  routePredictionModel?: RoutePredictionModel;
+}
+
+interface RoutePredictionModel {
+  templateRoute: [number, number][];
+  speedProfile: number[];
 }
 
 interface WeightedEdge {
@@ -90,6 +96,13 @@ const OBSERVED_PORT_CENTERS = {
 } satisfies Record<string, { lat: number; lon: number }>;
 
 const MAX_SPATIAL_REBUILD_POINTS = 1_500;
+const ROUTE_SUPPORT_POINTS = 72;
+const ROUTE_PROFILE_BUCKETS = 48;
+const ROUTE_ECO_FRACTION = 0.35;
+const ROUTE_ECO_MIN_TRACKS = 3;
+const ROUTE_ECO_MAX_TRACKS = 8;
+const MAX_REFERENCE_DEVIATION_NM = 18;
+const MAX_REFERENCE_DEVIATION_RATIO = 0.18;
 
 function getObservedPortCenter(portName: string): { lat: number; lon: number } | null {
   return OBSERVED_PORT_CENTERS[portName as keyof typeof OBSERVED_PORT_CENTERS] ?? null;
@@ -608,87 +621,222 @@ function sampleRouteCoordinates(
   });
 }
 
-function perturbRouteCoordinates(
-  coordinates: [number, number][],
-  variantIndex: number
-): [number, number][] {
-  if (coordinates.length < 3) {
-    return coordinates;
+function quantile(values: number[], ratio: number): number {
+  if (values.length === 0) {
+    return 0;
   }
 
-  const bounds = computeBounds(coordinates);
-  const routeSpan = Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]);
-  const amplitude = Math.min(0.045, Math.max(0.006, routeSpan * (0.003 + variantIndex * 0.00045)));
-  const phase = (variantIndex + 1) * 0.73;
+  const sorted = [...values].sort((left, right) => left - right);
+  const clampedRatio = Math.max(0, Math.min(1, ratio));
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.floor((sorted.length - 1) * clampedRatio))
+  );
+  return sorted[index];
+}
+
+function sampleTrackCoordinates(
+  track: TrackPointInput[],
+  sampleCount = ROUTE_SUPPORT_POINTS
+): [number, number][] {
+  if (track.length <= 1) {
+    return track.map((point) => [round(point.lon, 6), round(point.lat, 6)]);
+  }
+
+  const route = track.map((point) => [point.lon, point.lat] as [number, number]);
+  return Array.from({ length: sampleCount }, (_, index) => {
+    const progress = sampleCount === 1 ? 0 : index / (sampleCount - 1);
+    const [lon, lat] = interpolateAlongLine(route, progress);
+    return [round(lon, 6), round(lat, 6)] as [number, number];
+  });
+}
+
+function smoothRouteCoordinates(
+  coordinates: [number, number][],
+  windowRadius = 2
+): [number, number][] {
+  if (coordinates.length <= 2) {
+    return coordinates;
+  }
 
   return coordinates.map(([lon, lat], index) => {
     if (index === 0 || index === coordinates.length - 1) {
       return [round(lon, 6), round(lat, 6)];
     }
 
-    const [prevLon, prevLat] = coordinates[index - 1];
-    const [nextLon, nextLat] = coordinates[index + 1];
-    const dx = nextLon - prevLon;
-    const dy = nextLat - prevLat;
-    const length = Math.hypot(dx, dy) || 1;
-    const normalLon = -dy / length;
-    const normalLat = dx / length;
-    const progress = index / (coordinates.length - 1);
-    const envelope = Math.sin(Math.PI * progress);
-    const wave =
-      Math.sin(Math.PI * 2 * (variantIndex + 1) * progress + phase) * 0.72 +
-      Math.sin(Math.PI * (variantIndex + 2.5) * progress + phase * 0.5) * 0.28;
-    const offset = amplitude * envelope * wave;
-    return [round(lon + normalLon * offset, 6), round(lat + normalLat * offset, 6)];
+    const start = Math.max(0, index - windowRadius);
+    const end = Math.min(coordinates.length - 1, index + windowRadius);
+    const window = coordinates.slice(start, end + 1);
+    return [
+      round(average(window.map(([windowLon]) => windowLon)), 6),
+      round(average(window.map(([, windowLat]) => windowLat)), 6)
+    ];
   });
 }
 
-function buildBestRoutes(
-  actualRoute: [number, number][],
+function estimateTrackMetrics(track: TrackPointInput[]): {
+  distanceNm: number;
+  durationHours: number;
+  totalEmission: number;
+  emissionPerNm: number;
+} {
+  const distanceNm = trackDistanceNm(track);
+  let totalEmission = 0;
+  for (let index = 1; index < track.length; index += 1) {
+    const previous = track[index - 1];
+    const point = track[index];
+    const segmentDistance = haversineNm(previous.lat, previous.lon, point.lat, point.lon);
+    totalEmission += segmentDistance * point.speed ** 2;
+  }
+
+  const durationHours =
+    track.length > 1
+      ? (new Date(track[track.length - 1].ts).getTime() - new Date(track[0].ts).getTime()) /
+        (1000 * 60 * 60)
+      : 0;
+
+  return {
+    distanceNm,
+    durationHours,
+    totalEmission,
+    emissionPerNm: totalEmission / Math.max(distanceNm, 0.001)
+  };
+}
+
+function buildRoutePredictionModel(tracks: TrackPointInput[][]): RoutePredictionModel {
+  const rankedTracks = tracks
+    .map((track) => ({
+      track,
+      ...estimateTrackMetrics(track)
+    }))
+    .sort(
+      (left, right) =>
+        left.emissionPerNm - right.emissionPerNm ||
+        left.totalEmission - right.totalEmission ||
+        left.distanceNm - right.distanceNm
+    );
+
+  const ecoTrackCount = Math.min(
+    ROUTE_ECO_MAX_TRACKS,
+    Math.max(
+      Math.min(rankedTracks.length, ROUTE_ECO_MIN_TRACKS),
+      Math.ceil(rankedTracks.length * ROUTE_ECO_FRACTION)
+    )
+  );
+  const ecoTracks = rankedTracks.slice(0, ecoTrackCount).map((entry) => entry.track);
+  const sampledRoutes = ecoTracks.map((track) => sampleTrackCoordinates(track, ROUTE_SUPPORT_POINTS));
+
+  const templateRoute = smoothRouteCoordinates(
+    Array.from({ length: ROUTE_SUPPORT_POINTS }, (_, index) => [
+      round(median(sampledRoutes.map((route) => route[index]?.[0] ?? route[route.length - 1][0])), 6),
+      round(median(sampledRoutes.map((route) => route[index]?.[1] ?? route[route.length - 1][1])), 6)
+    ] as [number, number])
+  );
+
+  const sampledProfiles = ecoTracks.map((track) => sampleSpeedProfile(track, ROUTE_PROFILE_BUCKETS));
+  const speedProfile = Array.from({ length: ROUTE_PROFILE_BUCKETS }, (_, index) =>
+    round(
+      Math.max(
+        0.1,
+        quantile(
+          sampledProfiles.map((profile) => profile[index] ?? profile[profile.length - 1] ?? 0.1),
+          0.35
+        )
+      ),
+      3
+    )
+  );
+
+  return {
+    templateRoute,
+    speedProfile
+  };
+}
+
+function constrainReferenceRouteToActualCorridor(
+  actualTrack: TrackPointInput[],
+  templateRoute: [number, number][],
+  explicitReferenceRoute?: [number, number][]
+): [number, number][] {
+  const actualSample = sampleTrackCoordinates(actualTrack, ROUTE_SUPPORT_POINTS);
+  const externalTemplate =
+    explicitReferenceRoute && explicitReferenceRoute.length > 1
+      ? sampleRouteCoordinates(explicitReferenceRoute, ROUTE_SUPPORT_POINTS)
+      : null;
+  const blendedTemplate = templateRoute.map(([lon, lat], index) => {
+    if (!externalTemplate) {
+      return [lon, lat] as [number, number];
+    }
+
+    const [refLon, refLat] = externalTemplate[index] ?? externalTemplate[externalTemplate.length - 1];
+    return [
+      round(lon * 0.72 + refLon * 0.28, 6),
+      round(lat * 0.72 + refLat * 0.28, 6)
+    ] as [number, number];
+  });
+
+  const directDistance = haversineNm(
+    actualTrack[0].lat,
+    actualTrack[0].lon,
+    actualTrack[actualTrack.length - 1].lat,
+    actualTrack[actualTrack.length - 1].lon
+  );
+  const maxDeviationNm = Math.min(
+    MAX_REFERENCE_DEVIATION_NM,
+    Math.max(4, directDistance * MAX_REFERENCE_DEVIATION_RATIO)
+  );
+
+  return smoothRouteCoordinates(
+    blendedTemplate.map(([templateLon, templateLat], index) => {
+      if (index === 0 || index === blendedTemplate.length - 1) {
+        return [round(templateLon, 6), round(templateLat, 6)] as [number, number];
+      }
+
+      const [actualLon, actualLat] = actualSample[index];
+      const deviationNm = haversineNm(actualLat, actualLon, templateLat, templateLon);
+      if (deviationNm <= maxDeviationNm || deviationNm === 0) {
+        return [round(templateLon, 6), round(templateLat, 6)] as [number, number];
+      }
+
+      const ratio = maxDeviationNm / deviationNm;
+      return [
+        round(actualLon + (templateLon - actualLon) * ratio, 6),
+        round(actualLat + (templateLat - actualLat) * ratio, 6)
+      ] as [number, number];
+    })
+  );
+}
+
+function buildPredictedRouteCandidate(
+  referenceRoute: [number, number][],
   actualTotalEmission: number,
-  actualDistanceNm: number,
-  n = 5
+  referenceTotalEmission: number,
+  referenceDistanceNm: number,
+  referenceDurationHours: number
 ): BestRouteCandidate[] {
-  const sampledActualRoute = sampleRouteCoordinates(actualRoute);
-  const safeActualDistance = Math.max(actualDistanceNm, 0.001);
-  const safeActualEmission = Math.max(actualTotalEmission, 0);
-  const actualEmissionPerNm = safeActualEmission / safeActualDistance;
-  const candidates = Array.from({ length: n }, (_, index) => {
-    const coordinates = perturbRouteCoordinates(sampledActualRoute, index);
-    const targetReduction = Math.max(0.06, 0.18 - index * 0.03);
-    const distanceFactor = Math.min(0.998, 0.965 + index * 0.008);
-    const distanceNm = safeActualDistance * distanceFactor;
-    const totalEmission = safeActualEmission * (1 - targetReduction);
-    const emissionPerNm = distanceNm > 0 ? totalEmission / distanceNm : 0;
-    const avgSpeed = emissionPerNm > 0 ? Math.sqrt(emissionPerNm) : 0;
-    return {
-      routeId: `best-${index + 1}`,
-      rank: index + 1,
-      label: `Top ${index + 1} Best Route`,
-      sourceType: "derived" as const,
-      coordinates,
-      distanceNm: round(distanceNm, 3),
+  const emissionPerNm = referenceTotalEmission / Math.max(referenceDistanceNm, 0.001);
+  const avgSpeed =
+    referenceDurationHours > 0 ? referenceDistanceNm / referenceDurationHours : Math.sqrt(emissionPerNm);
+
+  return [
+    {
+      routeId: "predicted-1",
+      rank: 1,
+      label: "Predicted Low-Emission Route",
+      sourceType: "derived",
+      coordinates: sampleRouteCoordinates(referenceRoute),
+      distanceNm: round(referenceDistanceNm, 3),
       avgSpeed: round(avgSpeed, 3),
-      durationHours: round(avgSpeed > 0 ? distanceNm / avgSpeed : 0, 3),
-      totalEmission: round(totalEmission, 3),
+      durationHours: round(referenceDurationHours, 3),
+      totalEmission: round(referenceTotalEmission, 3),
       emissionPerNm: round(emissionPerNm, 3),
       reductionPercent:
         actualTotalEmission > 0
-          ? round(((actualTotalEmission - totalEmission) / actualTotalEmission) * 100, 2)
+          ? round(((actualTotalEmission - referenceTotalEmission) / actualTotalEmission) * 100, 2)
           : 0,
-      isRecommended: false
-    };
-  });
-
-  return candidates
-    .sort((left, right) => left.totalEmission - right.totalEmission)
-    .map((candidate, index) => ({
-      ...candidate,
-      routeId: `best-${index + 1}`,
-      rank: index + 1,
-      label: `Top ${index + 1} Best Route`,
-      isRecommended: index === 0
-    }));
+      isRecommended: true
+    }
+  ];
 }
 
 function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
@@ -709,15 +857,32 @@ function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
     input.origin,
     input.destination
   );
+  const chronologicalTrack = [...track].sort((left, right) => left.ts.localeCompare(right.ts));
+  const startDate = new Date(chronologicalTrack[0].ts);
+  const endDate = new Date(chronologicalTrack[chronologicalTrack.length - 1].ts);
+  const durationHours =
+    (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
   const actualRoute = track.map((point) => [point.lon, point.lat] as [number, number]);
   const referenceRoute =
-    input.referenceRoute && input.referenceRoute.length > 1
-      ? snapRouteEndpointsToPorts(input.referenceRoute, input.origin, input.destination)
-      : buildReferenceRouteFromTrack(track);
-  const referenceProfile =
-    input.referenceSpeedProfile && input.referenceSpeedProfile.length > 0
-      ? input.referenceSpeedProfile
-      : sampleSpeedProfile(track).map((speed) => speed * 0.94);
+    input.routePredictionModel
+      ? snapRouteEndpointsToPorts(
+          constrainReferenceRouteToActualCorridor(
+            track,
+            input.routePredictionModel.templateRoute,
+            input.referenceRoute
+          ),
+          input.origin,
+          input.destination
+        )
+      : input.referenceRoute && input.referenceRoute.length > 1
+        ? snapRouteEndpointsToPorts(input.referenceRoute, input.origin, input.destination)
+        : buildReferenceRouteFromTrack(track);
+  let referenceProfile =
+    input.routePredictionModel?.speedProfile && input.routePredictionModel.speedProfile.length > 0
+      ? [...input.routePredictionModel.speedProfile]
+      : input.referenceSpeedProfile && input.referenceSpeedProfile.length > 0
+        ? [...input.referenceSpeedProfile]
+        : sampleSpeedProfile(track).map((speed) => speed * 0.94);
   const { distances: actualDistances, totalDistance: actualTotalDistance, progress } = computeProgress(track);
   const referencePoints = progress.map((value) => interpolateAlongLine(referenceRoute, value));
   const referenceDistances = [0];
@@ -727,6 +892,16 @@ function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
     referenceDistances.push(
       referenceDistances[index - 1] + haversineNm(prevLat, prevLon, lat, lon)
     );
+  }
+  const baseReferenceDuration = track.slice(1).reduce((sum, point, index) => {
+    const segmentDistance = referenceDistances[index + 1] - referenceDistances[index];
+    const standardSpeed = Math.max(interpolateSeries(referenceProfile, progress[index + 1]), 0.1);
+    return sum + segmentDistance / standardSpeed;
+  }, 0);
+  if (input.routePredictionModel && durationHours > 0 && baseReferenceDuration > 0) {
+    const targetDuration = Math.min(durationHours * 1.08, Math.max(durationHours, baseReferenceDuration));
+    const scale = Math.max(0.85, Math.min(1.15, baseReferenceDuration / targetDuration));
+    referenceProfile = referenceProfile.map((speed) => round(Math.max(0.1, speed * scale), 3));
   }
   let cumulativeActualEmission = 0;
   let cumulativeStandardEmission = 0;
@@ -757,17 +932,24 @@ function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
       sourceType: input.sourceType
     };
   });
-  const chronologicalTrack = [...track].sort((left, right) => left.ts.localeCompare(right.ts));
-  const startDate = new Date(chronologicalTrack[0].ts);
-  const endDate = new Date(chronologicalTrack[chronologicalTrack.length - 1].ts);
-  const durationHours =
-    (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
   const maxSpeed = Math.max(...track.map((point) => point.speed), 0);
   const avgSpeed = durationHours > 0 ? actualTotalDistance / durationHours : average(track.map((point) => point.speed));
   const totalEmission = fullSeries.reduce((sum, point) => sum + point.actualEmission, 0);
+  const referenceTotalEmission = fullSeries.reduce((sum, point) => sum + point.standardEmission, 0);
+  const referenceTotalDistance = referenceDistances[referenceDistances.length - 1] ?? 0;
+  const referenceDurationHours = track.slice(1).reduce((sum, point, index) => {
+    const segmentDistance = referenceDistances[index + 1] - referenceDistances[index];
+    return sum + segmentDistance / Math.max(fullSeries[index + 1].standardSpeed, 0.1);
+  }, 0);
   const bestRoutes =
     input.sourceType === "real"
-      ? buildBestRoutes(actualRoute, totalEmission, actualTotalDistance)
+      ? buildPredictedRouteCandidate(
+          referenceRoute,
+          totalEmission,
+          referenceTotalEmission,
+          referenceTotalDistance,
+          referenceDurationHours
+        )
       : [];
   const availableDays = sortUniqueDays(fullSeries);
   return {
@@ -956,8 +1138,10 @@ export async function buildRealDataset(cleanedDataDir: string): Promise<RealData
   }
 
   const corridorProfiles = new Map<string, number[]>();
+  const routePredictionModels = new Map<string, RoutePredictionModel>();
   for (const [routeKey, tracks] of routeTracks.entries()) {
     corridorProfiles.set(routeKey, buildMedianProfile(tracks));
+    routePredictionModels.set(routeKey, buildRoutePredictionModel(tracks));
   }
 
   const corridorProfile = buildMedianProfile(classifiedVoyages.map((voyage) => voyage.points));
@@ -975,7 +1159,8 @@ export async function buildRealDataset(cleanedDataDir: string): Promise<RealData
         voyage.routeLine && voyage.routeLine.startsWith("LINESTRING")
           ? parseLineStringWkt(voyage.routeLine)
           : undefined,
-      referenceSpeedProfile: corridorProfiles.get(voyage.routeKey)
+      referenceSpeedProfile: corridorProfiles.get(voyage.routeKey),
+      routePredictionModel: routePredictionModels.get(voyage.routeKey)
     })
   );
 

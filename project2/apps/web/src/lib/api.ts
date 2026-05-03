@@ -80,6 +80,16 @@ export async function getEnvironmentLayer(
   return fetchJson(`/api/environment/layers/${layer}?${query.toString()}`);
 }
 
+export async function getEnvironmentWeights(
+  options?: { voyageId?: string; timeFilter?: TimeFilter }
+): Promise<DashboardSnapshot["weights"]> {
+  const query = withOptionalRange(new URLSearchParams(), options?.timeFilter);
+  if (options?.voyageId) {
+    query.set("voyageId", options.voyageId);
+  }
+  return fetchJson(`/api/environment/weights?${query.toString()}`);
+}
+
 export async function getPortPairVoyages(
   source: string,
   target: string,

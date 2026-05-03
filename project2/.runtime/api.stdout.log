@@ -6,18 +6,7 @@
 > @ais-vis/api@0.1.0 dev
 > tsx watch src/server.ts
 
-{"level":50,"time":1777658093397,"pid":14588,"hostname":"MorwenWang","err":{"type":"Error","message":"listen EADDRINUSE: address already in use 0.0.0.0:8787","stack":"Error: listen EADDRINUSE: address already in use 0.0.0.0:8787\n    at Server.setupListenHandle [as _listen2] (node:net:2008:16)\n    at listenInCluster (node:net:2065:12)\n    at node:net:2274:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)","code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"0.0.0.0","port":8787},"msg":"listen EADDRINUSE: address already in use 0.0.0.0:8787"}
-02:12:27 [tsx] change in ./src\lib\build-dataset.ts Rerunning...
-c{"level":30,"time":1777659147869,"pid":52612,"hostname":"MorwenWang","msg":"Server listening at http://127.0.0.1:8787"}
-{"level":30,"time":1777659147869,"pid":52612,"hostname":"MorwenWang","msg":"Server listening at http://10.23.103.11:8787"}
-{"level":30,"time":1777659147869,"pid":52612,"hostname":"MorwenWang","msg":"AIS API listening on http://0.0.0.0:8787"}
-02:12:48 [tsx] change in ./src\lib\build-dataset.ts Restarting...
-c{"level":50,"time":1777659168732,"pid":15404,"hostname":"MorwenWang","err":{"type":"Error","message":"listen EADDRINUSE: address already in use 0.0.0.0:8787","stack":"Error: listen EADDRINUSE: address already in use 0.0.0.0:8787\n    at Server.setupListenHandle [as _listen2] (node:net:2008:16)\n    at listenInCluster (node:net:2065:12)\n    at node:net:2274:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)","code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"0.0.0.0","port":8787},"msg":"listen EADDRINUSE: address already in use 0.0.0.0:8787"}
-02:22:29 [tsx] change in ./src\lib\build-dataset.ts Rerunning...
-c{"level":30,"time":1777659750018,"pid":39732,"hostname":"MorwenWang","msg":"Server listening at http://127.0.0.1:8787"}
-{"level":30,"time":1777659750018,"pid":39732,"hostname":"MorwenWang","msg":"Server listening at http://10.23.103.11:8787"}
-{"level":30,"time":1777659750018,"pid":39732,"hostname":"MorwenWang","msg":"AIS API listening on http://0.0.0.0:8787"}
-02:22:46 [tsx] change in ./src\lib\build-dataset.ts Restarting...
-c{"level":30,"time":1777659766672,"pid":11928,"hostname":"MorwenWang","msg":"Server listening at http://127.0.0.1:8787"}
-{"level":30,"time":1777659766672,"pid":11928,"hostname":"MorwenWang","msg":"Server listening at http://10.23.103.11:8787"}
-{"level":30,"time":1777659766673,"pid":11928,"hostname":"MorwenWang","msg":"AIS API listening on http://0.0.0.0:8787"}
+{"level":30,"time":1777803418968,"pid":19980,"hostname":"K","msg":"Server listening at http://127.0.0.1:8787"}
+{"level":30,"time":1777803418968,"pid":19980,"hostname":"K","msg":"Server listening at http://26.26.26.1:8787"}
+{"level":30,"time":1777803418968,"pid":19980,"hostname":"K","msg":"Server listening at http://10.32.79.80:8787"}
+{"level":30,"time":1777803418968,"pid":19980,"hostname":"K","msg":"AIS API listening on http://0.0.0.0:8787"}

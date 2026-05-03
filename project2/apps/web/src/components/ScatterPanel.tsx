@@ -28,6 +28,18 @@ function yJitter(index: number): number {
   return ((Math.floor(index / 5) % 9) - 4) * 0.45;
 }
 
+function displayEmissionUnit(unit: string): string {
+  if (unit === "score") {
+    return "Emission Index";
+  }
+
+  if (unit === "score/NM") {
+    return "Index/NM";
+  }
+
+  return unit;
+}
+
 export function ScatterPanel({
   items,
   totalCount,
@@ -61,9 +73,12 @@ export function ScatterPanel({
   const yMax = yValues.length > 0 ? Math.max(...yValues) + 3 : 100;
 
   const option: EChartsOption = {
-    grid: { left: 60, right: 24, top: 32, bottom: 78 },
+    grid: { left: 108, right: 56, top: 68, bottom: 96 },
     tooltip: {
       trigger: "item",
+      axisPointer: {
+        show: false
+      },
       formatter: (params: unknown) => {
         const payload = params as { data?: { item?: ScatterItem } };
         const item = payload.data?.item;
@@ -73,8 +88,8 @@ export function ScatterPanel({
         return [
           routeLabel(item),
           `Voyage: ${item.voyageId}`,
-          `Emission intensity: ${item.emissionPerNm.toFixed(2)} score/NM`,
-          `Total emission: ${item.totalEmission.toFixed(2)} ${item.emissionUnit}`,
+          `Emission Index per NM: ${item.emissionPerNm.toFixed(2)} Index/NM`,
+          `Total Emission Index: ${item.totalEmission.toFixed(2)} ${displayEmissionUnit(item.emissionUnit)}`,
           `Distance: ${item.distanceNm.toFixed(2)} NM`
         ].join("<br/>");
       }
@@ -82,24 +97,46 @@ export function ScatterPanel({
     xAxis: {
       name: "Port pair",
       type: "value",
+      axisPointer: {
+        show: false
+      },
       min: -0.6,
       max: Math.max(routeKeys.length - 0.4, 0.6),
       interval: 1,
       axisLabel: {
         color: "#a8c6e1",
         rotate: 18,
+        margin: 18,
         formatter: (value: number) => routeKeys[Math.round(value)] ?? ""
       },
-      axisLine: { lineStyle: { color: "#6b87a4" } },
+      nameLocation: "middle",
+      nameGap: 64,
+      axisLine: {
+        onZero: false,
+        lineStyle: { color: "#6b87a4" }
+      },
       splitLine: { show: false }
     },
     yAxis: {
-      name: "Emission intensity (score/NM)",
+      name: "Emission Index per NM (Index/NM)",
       type: "value",
+      axisPointer: {
+        show: false
+      },
       min: yMin,
       max: yMax,
       scale: true,
-      axisLine: { lineStyle: { color: "#6b87a4" } },
+      nameLocation: "end",
+      nameGap: 18,
+      nameRotate: 0,
+      axisLine: {
+        onZero: false,
+        lineStyle: { color: "#6b87a4" }
+      },
+      axisLabel: {
+        margin: 10,
+        color: "#a8c6e1"
+      },
       splitLine: { lineStyle: { color: "rgba(166, 193, 225, 0.1)" } }
     },
     series: [
@@ -133,23 +170,14 @@ export function ScatterPanel({
     <div className="panel chart-panel">
       <div className="panel-header">
         <div>
-          <h3>Voyage Emissions Scatter Plot</h3>
+          <h3>Voyage Emission Overview</h3>
           <p>
             Filter by origin and destination, then click a voyage point to show only that vessel's actual and ideal routes on the map.
           </p>
-        </div>
-        <div className="scatter-toolbar">
-          <button
-            type="button"
-            className="scatter-reset"
-            onClick={() => {
-              onChangeOriginFilter(null);
-              onChangeDestinationFilter(null);
-            }}
-            disabled={!originFilter && !destinationFilter}
-          >
-            Clear Filters
-          </button>
+          <p className="panel-note">
+            Emission Index is a normalized relative indicator used to compare emission burden
+            between voyages. It is not an absolute CO2 measurement.
+          </p>
         </div>
       </div>
       <div className="scatter-layout">

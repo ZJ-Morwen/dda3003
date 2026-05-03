@@ -26,6 +26,7 @@ export function EChart({ option, className, onEvents }: EChartProps) {
   }, []);
 
   useEffect(() => {
+    chartRef.current?.clear();
     chartRef.current?.setOption(option, true);
   }, [option]);
 
