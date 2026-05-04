@@ -257,32 +257,19 @@ function buildCumulativePoints(points: EmissionSeriesPoint[]): CumulativeSeriesP
   });
 }
 
-function sampleCumulativePoints(
-  points: CumulativeSeriesPoint[],
-  maxPoints = 64
+function buildCumulativeDisplayPoints(
+  displayPoints: EmissionSeriesPoint[],
+  cumulativePoints: CumulativeSeriesPoint[]
 ): CumulativeSeriesPoint[] {
-  if (points.length <= maxPoints) {
-    return points;
-  }
+  return displayPoints.map((point) => {
+    const cumulativePoint = findClosestPoint(cumulativePoints, point.ts) ?? cumulativePoints[0];
 
-  const interior = points.slice(1, -1);
-  const interiorSlots = Math.max(0, maxPoints - 2);
-  if (interiorSlots === 0 || interior.length === 0) {
-    return [points[0], points[points.length - 1]];
-  }
-
-  const bucketSize = interior.length / interiorSlots;
-  const sampled = [points[0]];
-
-  for (let index = 0; index < interiorSlots; index += 1) {
-    const start = Math.floor(index * bucketSize);
-    const end = Math.min(interior.length, Math.floor((index + 1) * bucketSize));
-    const bucket = interior.slice(start, Math.max(start + 1, end));
-    sampled.push(bucket[bucket.length - 1] ?? interior[start]);
-  }
-
-  sampled.push(points[points.length - 1]);
-  return sampled;
+    return {
+      ...point,
+      actualCumulative: cumulativePoint?.actualCumulative ?? 0,
+      referenceCumulative: cumulativePoint?.referenceCumulative ?? 0
+    };
+  });
 }
 
 function buildSelectionMarkPoint(
@@ -533,13 +520,18 @@ export function SeriesPanels({
   const chartPoints = getChartPoints(points);
   const defaultChartPoint = chartPoints[0] ?? points[0] ?? null;
   const selectedChartPoint = findClosestPoint(chartPoints, selectedTimestamp) ?? defaultChartPoint;
-  const deltaSelectedPoint = findClosestPoint(chartPoints, selectedTimestamp) ?? defaultChartPoint;
   const cumulativePoints = buildCumulativePoints(points);
-  const cumulativeDisplayPoints = sampleCumulativePoints(cumulativePoints);
+  const cumulativeDisplayPoints = buildCumulativeDisplayPoints(chartPoints, cumulativePoints);
   const defaultCumulativePoint =
-    cumulativeDisplayPoints[cumulativeDisplayPoints.length - 1] ?? null;
+    cumulativePoints[cumulativePoints.length - 1] ??
+    cumulativeDisplayPoints[cumulativeDisplayPoints.length - 1] ??
+    null;
+  const selectedCumulativeDisplayPoint = findClosestPoint(
+    cumulativeDisplayPoints,
+    selectedTimestamp
+  );
   const selectedCumulativePoint =
-    findClosestPoint(cumulativeDisplayPoints, selectedTimestamp) ?? defaultCumulativePoint;
+    selectedCumulativeDisplayPoint ?? defaultCumulativePoint;
   const currentDisplayedGap = selectedCumulativePoint
     ? selectedCumulativePoint.actualCumulative - selectedCumulativePoint.referenceCumulative
     : 0;
@@ -574,9 +566,9 @@ export function SeriesPanels({
         data: cumulativeDisplayPoints.map((point) => ({
           value: point.referenceCumulative,
           ts: point.ts,
-          symbolSize: point.ts === selectedCumulativePoint?.ts ? 10 : 6,
+          symbolSize: point.ts === selectedCumulativeDisplayPoint?.ts ? 10 : 6,
           itemStyle:
-            point.ts === selectedCumulativePoint?.ts
+            point.ts === selectedCumulativeDisplayPoint?.ts
               ? {
                   color: "#86f4dd",
                   borderColor: "#f2fbff",
@@ -596,9 +588,9 @@ export function SeriesPanels({
         data: cumulativeDisplayPoints.map((point) => ({
           value: point.actualCumulative,
           ts: point.ts,
-          symbolSize: point.ts === selectedCumulativePoint?.ts ? 10 : 6,
+          symbolSize: point.ts === selectedCumulativeDisplayPoint?.ts ? 10 : 6,
           itemStyle:
-            point.ts === selectedCumulativePoint?.ts
+            point.ts === selectedCumulativeDisplayPoint?.ts
               ? {
                   color: "#c4b4ff",
                   borderColor: "#f2fbff",
