@@ -6,6 +6,13 @@ export function cnNumber(value: number, fractionDigits = 2): string {
   }).format(value);
 }
 
+export function cnFixedNumber(value: number, fractionDigits = 2): string {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits
+  }).format(value);
+}
+
 export function sourceBadgeLabel(sourceType: SourceType): string {
   if (sourceType === "real") return "Real";
   if (sourceType === "derived") return "Derived";

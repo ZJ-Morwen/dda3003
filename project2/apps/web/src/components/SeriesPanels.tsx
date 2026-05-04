@@ -1,6 +1,6 @@
 import type { EChartsOption } from "echarts";
 import type { EmissionSeriesPoint } from "../lib/api";
-import { cnNumber } from "../lib/format";
+import { cnFixedNumber, cnNumber } from "../lib/format";
 import { EChart } from "./EChart";
 
 interface SeriesPanelsProps {
@@ -33,7 +33,7 @@ function TrendLegend({
           <span className="series-legend-label">{actualLabel}</span>
         </span>
         <span className="series-legend-value">
-          {actualValue !== undefined ? cnNumber(actualValue, digits) : "--"}
+          {actualValue !== undefined ? cnFixedNumber(actualValue, digits) : "--"}
         </span>
       </span>
       <span className="series-legend-item">
@@ -42,7 +42,7 @@ function TrendLegend({
           <span className="series-legend-label">{referenceLabel}</span>
         </span>
         <span className="series-legend-value">
-          {referenceValue !== undefined ? cnNumber(referenceValue, digits) : "--"}
+          {referenceValue !== undefined ? cnFixedNumber(referenceValue, digits) : "--"}
         </span>
       </span>
     </div>
@@ -457,8 +457,6 @@ export function SeriesPanels({
 }: SeriesPanelsProps) {
   const chartPoints = getChartPoints(points);
   const defaultChartPoint = chartPoints[0] ?? points[0] ?? null;
-  const activePoint =
-    chartPoints.find((point) => point.ts === selectedTimestamp) ?? defaultChartPoint;
   const selectedChartPoint = findClosestPoint(chartPoints, selectedTimestamp) ?? defaultChartPoint;
   const deltaSelectedPoint = findClosestPoint(chartPoints, selectedTimestamp) ?? defaultChartPoint;
   const cumulativePoints = chartPoints.map((point, index) => ({
@@ -472,6 +470,11 @@ export function SeriesPanels({
         .slice(0, index + 1)
         .reduce((sum, entry) => sum + entry.standardEmission, 0)
   }));
+  const selectedCumulativePoint =
+    cumulativePoints.find((point) => point.ts === deltaSelectedPoint?.ts) ?? null;
+  const currentDisplayedGap = selectedCumulativePoint
+    ? selectedCumulativePoint.actualCumulative - selectedCumulativePoint.referenceCumulative
+    : 0;
 
   const deltaOption: EChartsOption = {
     grid: { left: 50, right: 24, top: 28, bottom: 36 },
@@ -620,19 +623,15 @@ export function SeriesPanels({
         <div className="panel-header">
           <div className="series-header-block">
             <h3>Cumulative Emission Index</h3>
-            <p>Current gap: {cnNumber(activePoint?.deltaCumulative ?? 0)}</p>
+            <p>Current gap: {cnNumber(currentDisplayedGap, 4)}</p>
             <TrendLegend
               actualLabel="Real cumulative"
               referenceLabel="Predicted cumulative"
               actualValue={
-                deltaSelectedPoint
-                  ? cumulativePoints.find((point) => point.ts === deltaSelectedPoint.ts)?.actualCumulative
-                  : undefined
+                selectedCumulativePoint?.actualCumulative
               }
               referenceValue={
-                deltaSelectedPoint
-                  ? cumulativePoints.find((point) => point.ts === deltaSelectedPoint.ts)?.referenceCumulative
-                  : undefined
+                selectedCumulativePoint?.referenceCumulative
               }
               digits={4}
             />

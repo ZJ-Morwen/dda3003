@@ -9,6 +9,12 @@ import type {
   VoyageSummary
 } from "../../../../shared/contracts";
 
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
+function withApiBase(path: string): string {
+  return `${apiBaseUrl}${path}`;
+}
+
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init);
   if (!response.ok) {
@@ -45,7 +51,7 @@ export async function getDashboardSnapshot(startDate?: string, endDate?: string)
   const query = new URLSearchParams();
   if (startDate) query.set("startTs", startDate);
   if (endDate) query.set("endTs", endDate);
-  return fetchJson<DashboardSnapshot>(`/api/dashboard/snapshot?${query.toString()}`);
+  return fetchJson<DashboardSnapshot>(withApiBase(`/api/dashboard/snapshot?${query.toString()}`));
 }
 
 export async function getRoute(
@@ -56,7 +62,7 @@ export async function getRoute(
   if (options?.ts) {
     query.set("ts", options.ts);
   }
-  return fetchJson<RouteGeometryPayload>(`/api/voyages/${voyageId}/route?${query.toString()}`);
+  return fetchJson<RouteGeometryPayload>(withApiBase(`/api/voyages/${voyageId}/route?${query.toString()}`));
 }
 
 export async function getEmissionSeries(
@@ -64,12 +70,12 @@ export async function getEmissionSeries(
   timeFilter?: TimeFilter
 ): Promise<{ voyageId: string; sourceType: "real" | "mock" | "derived"; points: EmissionSeriesPoint[] }> {
   const query = withOptionalRange(new URLSearchParams(), timeFilter);
-  return fetchJson(`/api/voyages/${voyageId}/emission-series?${query.toString()}`);
+  return fetchJson(withApiBase(`/api/voyages/${voyageId}/emission-series?${query.toString()}`));
 }
 
 export async function getMetrics(voyageId: string, timeFilter?: TimeFilter): Promise<RouteMetrics> {
   const query = withOptionalRange(new URLSearchParams(), timeFilter);
-  return fetchJson(`/api/voyages/${voyageId}/metrics?${query.toString()}`);
+  return fetchJson(withApiBase(`/api/voyages/${voyageId}/metrics?${query.toString()}`));
 }
 
 export async function getEnvironmentLayer(
@@ -77,7 +83,7 @@ export async function getEnvironmentLayer(
   ts: string
 ): Promise<EnvironmentFieldPayload> {
   const query = new URLSearchParams({ ts });
-  return fetchJson(`/api/environment/layers/${layer}?${query.toString()}`);
+  return fetchJson(withApiBase(`/api/environment/layers/${layer}?${query.toString()}`));
 }
 
 export async function getEnvironmentWeights(
@@ -87,7 +93,7 @@ export async function getEnvironmentWeights(
   if (options?.voyageId) {
     query.set("voyageId", options.voyageId);
   }
-  return fetchJson(`/api/environment/weights?${query.toString()}`);
+  return fetchJson(withApiBase(`/api/environment/weights?${query.toString()}`));
 }
 
 export async function getPortPairVoyages(
@@ -96,11 +102,11 @@ export async function getPortPairVoyages(
   timeFilter: TimeFilter
 ): Promise<{ source: string; target: string; items: VoyageSummary[] }> {
   const query = new URLSearchParams(toRange(timeFilter));
-  return fetchJson(`/api/port-flows/${source}/${target}/voyages?${query.toString()}`);
+  return fetchJson(withApiBase(`/api/port-flows/${source}/${target}/voyages?${query.toString()}`));
 }
 
 export async function recordAnimationCheck(payload: unknown): Promise<void> {
-  await fetchJson("/api/diagnostics/animation-check", {
+  await fetchJson(withApiBase("/api/diagnostics/animation-check"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
