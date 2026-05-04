@@ -12,6 +12,11 @@ interface SeriesPanelsProps {
   onClearTimeRange: () => void;
 }
 
+type CumulativeSeriesPoint = EmissionSeriesPoint & {
+  actualCumulative: number;
+  referenceCumulative: number;
+};
+
 function TrendLegend({
   actualLabel = "Real",
   referenceLabel = "Predicted",
@@ -156,32 +161,58 @@ function getChartPoints(points: EmissionSeriesPoint[]): EmissionSeriesPoint[] {
   return samplePoints(trimEdgePoints(points));
 }
 
-function findClosestPoint(points: EmissionSeriesPoint[], selectedTimestamp: string | null): EmissionSeriesPoint | null {
+function findClosestPoint<T extends { ts: string }>(
+  points: T[],
+  selectedTimestamp: string | null
+): T | null {
   if (!selectedTimestamp || points.length === 0) {
     return null;
   }
 
   const target = new Date(selectedTimestamp).getTime();
-  return points.reduce((closest, point) => {
+  return points.reduce<T | null>((closest, point) => {
     const pointTime = new Date(point.ts).getTime();
     if (!closest) {
       return point;
     }
     const closestTime = new Date(closest.ts).getTime();
     return Math.abs(pointTime - target) < Math.abs(closestTime - target) ? point : closest;
-  }, null as EmissionSeriesPoint | null);
+  }, null);
+}
+
+function findClosestIndex<T extends { ts: string }>(
+  points: T[],
+  selectedTimestamp: string | null
+): number {
+  if (!selectedTimestamp || points.length === 0) {
+    return -1;
+  }
+
+  const target = new Date(selectedTimestamp).getTime();
+  let closestIndex = 0;
+  let smallestDiff = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index < points.length; index += 1) {
+    const diff = Math.abs(new Date(points[index].ts).getTime() - target);
+    if (diff < smallestDiff) {
+      smallestDiff = diff;
+      closestIndex = index;
+    }
+  }
+
+  return closestIndex;
 }
 
 function findRangeIndexes(
-  points: EmissionSeriesPoint[],
+  points: Array<{ ts: string }>,
   selectedTimeRange: { startTs: string; endTs: string } | null
 ): [number, number] | null {
   if (!selectedTimeRange || points.length === 0) {
     return null;
   }
 
-  const start = points.findIndex((point) => point.ts === selectedTimeRange.startTs);
-  const end = points.findIndex((point) => point.ts === selectedTimeRange.endTs);
+  const start = findClosestIndex(points, selectedTimeRange.startTs);
+  const end = findClosestIndex(points, selectedTimeRange.endTs);
   if (start < 0 || end < 0) {
     return null;
   }
@@ -208,6 +239,50 @@ function buildRangeMarkArea(
       [{ xAxis: number }, { xAxis: number }]
     ]
   };
+}
+
+function buildCumulativePoints(points: EmissionSeriesPoint[]): CumulativeSeriesPoint[] {
+  let actualCumulative = 0;
+  let referenceCumulative = 0;
+
+  return points.map((point) => {
+    actualCumulative += point.actualEmission;
+    referenceCumulative += point.standardEmission;
+
+    return {
+      ...point,
+      actualCumulative: roundTo(actualCumulative),
+      referenceCumulative: roundTo(referenceCumulative)
+    };
+  });
+}
+
+function sampleCumulativePoints(
+  points: CumulativeSeriesPoint[],
+  maxPoints = 64
+): CumulativeSeriesPoint[] {
+  if (points.length <= maxPoints) {
+    return points;
+  }
+
+  const interior = points.slice(1, -1);
+  const interiorSlots = Math.max(0, maxPoints - 2);
+  if (interiorSlots === 0 || interior.length === 0) {
+    return [points[0], points[points.length - 1]];
+  }
+
+  const bucketSize = interior.length / interiorSlots;
+  const sampled = [points[0]];
+
+  for (let index = 0; index < interiorSlots; index += 1) {
+    const start = Math.floor(index * bucketSize);
+    const end = Math.min(interior.length, Math.floor((index + 1) * bucketSize));
+    const bucket = interior.slice(start, Math.max(start + 1, end));
+    sampled.push(bucket[bucket.length - 1] ?? interior[start]);
+  }
+
+  sampled.push(points[points.length - 1]);
+  return sampled;
 }
 
 function buildSelectionMarkPoint(
@@ -459,19 +534,12 @@ export function SeriesPanels({
   const defaultChartPoint = chartPoints[0] ?? points[0] ?? null;
   const selectedChartPoint = findClosestPoint(chartPoints, selectedTimestamp) ?? defaultChartPoint;
   const deltaSelectedPoint = findClosestPoint(chartPoints, selectedTimestamp) ?? defaultChartPoint;
-  const cumulativePoints = chartPoints.map((point, index) => ({
-    ...point,
-    actualCumulative:
-      chartPoints
-        .slice(0, index + 1)
-        .reduce((sum, entry) => sum + entry.actualEmission, 0),
-    referenceCumulative:
-      chartPoints
-        .slice(0, index + 1)
-        .reduce((sum, entry) => sum + entry.standardEmission, 0)
-  }));
+  const cumulativePoints = buildCumulativePoints(points);
+  const cumulativeDisplayPoints = sampleCumulativePoints(cumulativePoints);
+  const defaultCumulativePoint =
+    cumulativeDisplayPoints[cumulativeDisplayPoints.length - 1] ?? null;
   const selectedCumulativePoint =
-    cumulativePoints.find((point) => point.ts === deltaSelectedPoint?.ts) ?? null;
+    findClosestPoint(cumulativeDisplayPoints, selectedTimestamp) ?? defaultCumulativePoint;
   const currentDisplayedGap = selectedCumulativePoint
     ? selectedCumulativePoint.actualCumulative - selectedCumulativePoint.referenceCumulative
     : 0;
@@ -485,7 +553,7 @@ export function SeriesPanels({
     },
     xAxis: {
       type: "category",
-      data: chartPoints.map((point) => point.ts.slice(11, 16)),
+      data: cumulativeDisplayPoints.map((point) => point.ts.slice(11, 16)),
       boundaryGap: false
     },
     yAxis: {
@@ -502,13 +570,13 @@ export function SeriesPanels({
         symbolSize: 6,
         lineStyle: { color: "#47d0c9", width: 2, type: "dashed" },
         itemStyle: { color: "#86f4dd" },
-        markArea: buildRangeMarkArea(chartPoints, selectedTimeRange),
-        data: cumulativePoints.map((point) => ({
+        markArea: buildRangeMarkArea(cumulativeDisplayPoints, selectedTimeRange),
+        data: cumulativeDisplayPoints.map((point) => ({
           value: point.referenceCumulative,
           ts: point.ts,
-          symbolSize: point.ts === deltaSelectedPoint?.ts ? 10 : 6,
+          symbolSize: point.ts === selectedCumulativePoint?.ts ? 10 : 6,
           itemStyle:
-            point.ts === deltaSelectedPoint?.ts
+            point.ts === selectedCumulativePoint?.ts
               ? {
                   color: "#86f4dd",
                   borderColor: "#f2fbff",
@@ -525,12 +593,12 @@ export function SeriesPanels({
         symbolSize: 6,
         lineStyle: { color: "#9f89ff", width: 2.5 },
         itemStyle: { color: "#c4b4ff" },
-        data: cumulativePoints.map((point) => ({
+        data: cumulativeDisplayPoints.map((point) => ({
           value: point.actualCumulative,
           ts: point.ts,
-          symbolSize: point.ts === deltaSelectedPoint?.ts ? 10 : 6,
+          symbolSize: point.ts === selectedCumulativePoint?.ts ? 10 : 6,
           itemStyle:
-            point.ts === deltaSelectedPoint?.ts
+            point.ts === selectedCumulativePoint?.ts
               ? {
                   color: "#c4b4ff",
                   borderColor: "#f2fbff",
