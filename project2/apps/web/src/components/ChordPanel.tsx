@@ -6,10 +6,9 @@ import type { PortFlow } from "../../../../shared/contracts";
 interface ChordPanelProps {
   flows: PortFlow[];
   selectedPortPair: [string, string] | null;
-  onSelect: (flow: PortFlow) => void;
 }
 
-export function ChordPanel({ flows, selectedPortPair, onSelect }: ChordPanelProps) {
+export function ChordPanel({ flows, selectedPortPair }: ChordPanelProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   const ports = useMemo(
@@ -26,9 +25,9 @@ export function ChordPanel({ flows, selectedPortPair, onSelect }: ChordPanelProp
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
-    const width = 400;
-    const height = 400;
-    const outerRadius = Math.min(width, height) * 0.42;
+    const width = 560;
+    const height = 460;
+    const outerRadius = Math.min(width, height) * 0.39;
     const innerRadius = outerRadius - 28;
     const portIndex = new Map(ports.map((port, index) => [port, index]));
     const matrix = Array.from({ length: ports.length }, () =>
@@ -79,20 +78,25 @@ export function ChordPanel({ flows, selectedPortPair, onSelect }: ChordPanelProp
       .join("text")
       .attr("transform", (group) => {
         const midAngle = (group.startAngle + group.endAngle) / 2;
-        const radius = innerRadius + (outerRadius - innerRadius) * 0.58;
+        const radius = outerRadius + 26;
         const x = Math.cos(midAngle - Math.PI / 2) * radius;
         const y = Math.sin(midAngle - Math.PI / 2) * radius;
         return `translate(${x},${y})`;
       })
-      .attr("text-anchor", "middle")
+      .attr("text-anchor", (group) => {
+        const midAngle = (group.startAngle + group.endAngle) / 2;
+        const x = Math.cos(midAngle - Math.PI / 2);
+        if (Math.abs(x) < 0.18) return "middle";
+        return x > 0 ? "start" : "end";
+      })
       .attr("dominant-baseline", "middle")
       .attr("fill", "#f8fdff")
       .attr("stroke", "rgba(7,16,25,0.92)")
       .attr("stroke-width", 3)
       .attr("paint-order", "stroke")
       .attr("stroke-linejoin", "round")
-      .attr("font-size", 11)
-      .attr("font-weight", 700)
+      .attr("font-size", 18)
+      .attr("font-weight", 800)
       .text((group) => ports[group.index]);
 
     root
@@ -120,14 +124,9 @@ export function ChordPanel({ flows, selectedPortPair, onSelect }: ChordPanelProp
         const target = ports[entry.target.index];
         return selectedPortPair[0] === source && selectedPortPair[1] === target ? 1 : 0.68;
       })
-      .style("cursor", "pointer")
-      .on("click", (_, entry) => {
-        const source = ports[entry.source.index];
-        const target = ports[entry.target.index];
-        const flow = flows.find((item) => item.source === source && item.target === target);
-        if (flow) {
-          onSelect(flow);
-        }
+      .style("cursor", "default")
+      .on("click", (event) => {
+        event.stopPropagation();
       })
       .append("title")
       .text((entry) => {
@@ -136,7 +135,7 @@ export function ChordPanel({ flows, selectedPortPair, onSelect }: ChordPanelProp
         const value = matrix[entry.source.index][entry.target.index];
         return `${source} -> ${target}: ${value}`;
       });
-  }, [flows, onSelect, ports, selectedPortPair]);
+  }, [flows, ports, selectedPortPair]);
 
   const activeFlow =
     selectedPortPair &&

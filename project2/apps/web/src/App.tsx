@@ -336,9 +336,6 @@ export default function App() {
           <ChordPanel
             flows={visiblePortFlows}
             selectedPortPair={selectedPortPair}
-            onSelect={(flow) => {
-              setSelectedPortPair([flow.source, flow.target]);
-            }}
           />
           <DetailPanel point={activePoint} />
         </aside>
