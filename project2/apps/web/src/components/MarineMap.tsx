@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from "react";
 
 const velocityDataUrls = {
-  wind: new URL("../../../../wind-global.json", import.meta.url).href,
-  current: new URL("../../../../ocean-current-global.json", import.meta.url).href
+  wind: new URL("../../../../data/support/wind-global.json", import.meta.url).href,
+  current: new URL("../../../../data/support/ocean-current-global.json", import.meta.url).href
 } as const;
 
 const velocityLayerConfig = {
