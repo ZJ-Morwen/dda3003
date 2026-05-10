@@ -77,24 +77,70 @@ Step 2: start the frontend
 - If port `5173` is already in use, Vite may automatically switch to another port such as `5174`. In that case, open the URL shown in the terminal output.
 
 Step 3: use the demo
-- Open the frontend URL in a browser.
-- Wait for the dashboard snapshot to load.
-- Select a voyage from the scatter plot.
-- Inspect the route map, emission series, speed series, cumulative emission index, and route comparison panels.
-- Click time points in the charts to see linked updates across the map and detail panels.
+- Open the frontend URL in a browser and wait for the dashboard snapshot to finish loading.
+- Begin with the `Voyage Emission Overview` scatter plot, which is the main entry point for selecting voyages for analysis.
+- Use the `Origin Port` and `Destination Port` dropdown menus to filter the voyage set by port pair before selecting a specific case.
+- Once the filters are applied, the scatter plot updates immediately and retains only voyages that belong to the selected route.
+- This filtering stage is important because it supports comparison within the same operational context rather than across unrelated port pairs.
+- In the scatter plot, each point represents one voyage.
+- The horizontal grouping corresponds to the route or port pair.
+- The vertical position represents the relative `Emission Index per NM`.
+- Hovering over a scatter point opens a tooltip that reports the voyage ID, total emission index, emission index per nautical mile, and voyage distance.
+- Clicking a scatter point selects that voyage and updates all linked panels in the dashboard.
+- After a voyage is selected, the left side of the interface displays three coordinated time-series views:
+- `Emission Trend`
+- `Speed Trend`
+- `Cumulative Emission Index`
+- These three charts are time-aligned, meaning that they all describe the same voyage timeline and correspond to the same ordered timestamps.
+- Hovering over any line chart reveals detailed values for the selected time position and allows direct comparison between the actual curve and the reference or predicted curve.
+- Clicking a single point in a chart selects that timestamp as the active analytical moment.
+- Once a timestamp is selected, the map context and the `Point Detail` panel update to the same moment automatically.
+- The charts also support interval-based inspection.
+- Click one point in the chart as the start time.
+- Click a second point as the end time.
+- After the second click, the system creates a selected time interval, highlights that interval in the line charts, and simultaneously highlights the corresponding segment of the voyage trajectory on the map.
+- The highlighted map segment is shown for both the actual AIS route and the corresponding reference route, so the user can compare actual and reference movement during the same time window.
+- The start and end of the selected actual route segment are also marked visually on the map, making the selected interval easier to interpret.
+- If a different interval is required, click `Clear Range` to remove the current selection and start again.
+- The central `Route Map` shows only the currently selected voyage, which keeps the spatial display focused and avoids overlap with unrelated trajectories.
+- The map displays both the actual AIS route and the matched reference or ideal route.
+- Hovering over route lines reveals route-level summary information, including distance, average speed, total emission index, and emission index per nautical mile.
+- Hovering over port markers reveals supporting metadata such as port name, region, role, and location.
+- The map also supports time-based interaction.
+- Clicking an AIS point on the map selects the corresponding timestamp directly.
+- Clicking near the route selects the nearest voyage point, allowing the map and charts to be used together for detailed spatio-temporal inspection.
+- Above the map, the environment-layer controls allow the user to switch the visualisation between `wind` and `current`.
+- This control changes only the environmental field displayed in the background and does not change the selected voyage or the active time context.
+- On the right side, the `Point Detail` panel provides the numerical values associated with the current timestamp.
+- These values include actual position, actual speed, actual emission, reference position, reference speed, reference emission, instantaneous delta, and cumulative delta.
+- The `Port Flow Chord Diagram` summarises the broader movement structure between ports in the dataset and provides route-network context beyond the selected voyage.
+- The `Environment Mix` panel summarises the relative influence of wind, current, and wave factors in the current analytical context.
+- The status and metric panels provide a concise summary of the selected port pair, selected voyage, visible voyage count after filtering, and cumulative emission gap at the active point.
+- A recommended demonstration sequence is to filter by origin and destination ports, select one voyage in the scatter plot, inspect detailed values by hovering over the charts, define a start and end time in the charts, observe the highlighted segment on the map, and finally switch between `wind` and `current` to compare environmental context.
 
 Expected demo behavior:
-- The scatter plot shows voyage-level emission distribution.
-- The map displays the actual AIS route and a reference route.
-- Metric panels compare voyage indicators.
+- The scatter plot shows voyage-level emission distribution and supports filtering by origin port and destination port.
+- Hovering over a scatter point reveals summary information for one voyage.
+- Clicking a scatter point selects one voyage and updates the linked dashboard panels.
+- The map displays the actual AIS route and a reference route for the selected voyage.
+- Hovering over the charts reveals detailed values for actual and reference curves at the same timestamp.
+- The three line charts stay synchronized on the same voyage timeline.
+- Clicking a single chart point updates the active timestamp used by the map and detail panel.
+- Clicking one chart point as a start and another as an end creates a time interval selection.
+- The selected time interval is highlighted in the charts.
+- The corresponding actual and reference route segments are highlighted on the map.
+- Clicking AIS points on the map can also update the active timestamp.
+- Metric panels compare voyage indicators for the selected case.
 - Port-flow views summarize movements between ports.
 - Environment-related panels show the relative effect of wind/current/wave layers used in the visualization.
+- The map layer can be switched between wind and current without changing the selected voyage.
 
 Important notes for interpretation:
 - The AIS voyages are based on real cleaned AIS input data.
-- The reference or predicted route is derived from historical voyages and should not be interpreted as ground truth.
-- The environment layers are included as supporting environmental context for visualization.
-- The emission values are relative scores, not direct measured emissions.
+- The reference or predicted route is derived from historical voyages and should not be interpreted as ground truth or as an operationally optimal navigation instruction.
+- The environment layers are included as supporting environmental context for visualization and interaction, not as a full physical simulation of marine weather or ocean dynamics.
+- The emission values shown in the system are relative analytical scores, not direct measured emissions or exact CO2 inventory values.
+- A higher `Emission Index` should therefore be interpreted as relatively higher modeled emission burden in this demo, rather than as an exact real-world physical emission quantity.
 
 
 4) DEMO VIDEO
