@@ -1,0 +1,56 @@
+[
+  {
+    "source": "Tianjin",
+    "target": "Qingdao",
+    "value": 97,
+    "description": "Based on real Tianjin-Qingdao AIS voyage counts."
+  },
+  {
+    "source": "Shanghai",
+    "target": "Ningbo",
+    "value": 36,
+    "description": "High-frequency nearshore route network in the Yangtze River Delta."
+  },
+  {
+    "source": "Shanghai",
+    "target": "Qingdao",
+    "value": 18,
+    "description": "Shipping connection from East China to the Jiaodong Peninsula."
+  },
+  {
+    "source": "Ningbo",
+    "target": "Shenzhen",
+    "value": 24,
+    "description": "North-south coastal trunk shipping corridor."
+  },
+  {
+    "source": "Qingdao",
+    "target": "Shenzhen",
+    "value": 15,
+    "description": "Intermodal corridor from Jiaodong to the Pearl River Delta."
+  },
+  {
+    "source": "Tianjin",
+    "target": "Shanghai",
+    "value": 21,
+    "description": "Route from the Bohai Rim to the Yangtze River Delta."
+  },
+  {
+    "source": "Qingdao",
+    "target": "Ningbo",
+    "value": 12,
+    "description": "Feeder connection along the East China coast."
+  },
+  {
+    "source": "Shenzhen",
+    "target": "Shanghai",
+    "value": 14,
+    "description": "Northbound route from the Pearl River Delta."
+  },
+  {
+    "source": "Tianjin",
+    "target": "Shenzhen",
+    "value": 9,
+    "description": "Long-distance southbound supply route."
+  }
+]

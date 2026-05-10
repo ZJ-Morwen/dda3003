@@ -6,7 +6,7 @@ describe("format helpers", () => {
   it("formats source badges in English", () => {
     expect(sourceBadgeLabel("real")).toBe("Real");
     expect(sourceBadgeLabel("derived")).toBe("Derived");
-    expect(sourceBadgeLabel("mock")).toBe("Mock");
+    expect(sourceBadgeLabel("supplemental")).toBe("Supplemental");
   });
 
   it("formats positive delta values with sign", () => {

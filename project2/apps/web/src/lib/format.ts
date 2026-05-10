@@ -16,7 +16,7 @@ export function cnFixedNumber(value: number, fractionDigits = 2): string {
 export function sourceBadgeLabel(sourceType: SourceType): string {
   if (sourceType === "real") return "Real";
   if (sourceType === "derived") return "Derived";
-  return "Mock";
+  return "Supplemental";
 }
 
 export function metricDeltaLabel(delta: number): string {

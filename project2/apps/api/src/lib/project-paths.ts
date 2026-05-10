@@ -6,7 +6,7 @@ function hasProjectMarkers(candidate: string): boolean {
   return (
     existsSync(path.join(candidate, "package.json")) &&
     existsSync(path.join(candidate, "apps")) &&
-    existsSync(path.join(candidate, "data", "mock"))
+    existsSync(path.join(candidate, "data", "support"))
   );
 }
 

@@ -7,7 +7,7 @@ This project is split into three main layers:
 - `apps/web`
   Frontend React + Vite application. Responsible for page composition, chart interaction, map interaction, filtering, and calling backend APIs.
 - `apps/api`
-  Fastify backend. Responsible for reading generated voyage data, slicing time ranges, computing metrics, building map payloads, generating mock environment layers, and returning API responses.
+  Fastify backend. Responsible for reading generated voyage data, slicing time ranges, computing metrics, building map payloads, generating environment context layers, and returning API responses.
 - `shared`
   Shared TypeScript contracts between frontend and backend. Defines common payload types such as `DashboardSnapshot`, `EmissionSeriesPoint`, `RouteMetrics`, `RouteGeometryPayload`, and environment models.
 
@@ -15,8 +15,8 @@ Supporting data directories:
 
 - `data/generated`
   Preprocessed real voyage outputs used by the API.
-- `data/mock`
-  Mock seeds for environment layers and auxiliary demo data.
+- `data/support`
+  Support data for environment layers and auxiliary demo data.
 - `tools/preprocess.ts`
   Offline preprocessing script that transforms raw AIS CSV files into generated JSON datasets.
 
@@ -320,7 +320,7 @@ Key functions:
 
 Behavior:
 
-- Reads `real-data.json`, mock voyage seeds, port flow seeds, and environment seeds.
+- Reads `real-data.json`, supplemental voyage seeds, port flow context data, and environment context data.
 - Uses generated file `mtimeMs` as dataset version.
 - Reloads only when generated data changes.
 
@@ -419,7 +419,7 @@ Key function:
 
 Behavior:
 
-- Uses mock seed parameters to generate vector fields on a regular grid.
+- Uses support-layer parameters to generate vector fields on a regular grid.
 - Returns vectors with:
   - `lon`
   - `lat`
@@ -427,7 +427,7 @@ Behavior:
   - `v`
   - `intensity`
 
-This layer is still synthetic, but deterministic for a given time and layer.
+This layer remains deterministic for a given time and layer.
 
 ### 7.2 Dynamic Environment Weights
 

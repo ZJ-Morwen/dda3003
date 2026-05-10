@@ -68,7 +68,7 @@ export async function getRoute(
 export async function getEmissionSeries(
   voyageId: string,
   timeFilter?: TimeFilter
-): Promise<{ voyageId: string; sourceType: "real" | "mock" | "derived"; points: EmissionSeriesPoint[] }> {
+): Promise<{ voyageId: string; sourceType: "real" | "supplemental" | "derived"; points: EmissionSeriesPoint[] }> {
   const query = withOptionalRange(new URLSearchParams(), timeFilter);
   return fetchJson(withApiBase(`/api/voyages/${voyageId}/emission-series?${query.toString()}`));
 }

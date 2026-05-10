@@ -72,7 +72,7 @@ export interface RealDataset {
   voyages: DatasetVoyage[];
 }
 
-export interface MockVoyageSeed {
+export interface SupplementalVoyageSeed {
   voyageId: string;
   label: string;
   source: string;
@@ -114,7 +114,7 @@ export interface EnvironmentWeightsPayloadInternal {
 
 export interface CompositeDataset {
   real: RealDataset;
-  mockVoyages: DatasetVoyage[];
+  supplementalVoyages: DatasetVoyage[];
   portFlowSeeds: PortFlowSeed[];
   environmentSeeds: EnvironmentSeedFile;
 }

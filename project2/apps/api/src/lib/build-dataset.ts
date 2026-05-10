@@ -12,7 +12,7 @@ import { computeBounds, haversineNm, interpolateAlongLine, parseLineStringWkt } 
 import type {
   DatasetMeta,
   DatasetVoyage,
-  MockVoyageSeed,
+  SupplementalVoyageSeed,
   PortFlowSeed,
   RawSummary,
   RealDataset
@@ -602,8 +602,6 @@ export function buildMedianProfile(tracks: TrackPointInput[][], bucketCount = 48
 }
 
 function buildReferenceRouteFromTrack(track: TrackPointInput[]): [number, number][] {
-  // When we do not have an explicit shipping corridor, use the real sea route
-  // itself as the reference geometry so the "ideal" line does not cut across land.
   return track.map((point) => [point.lon, point.lat]);
 }
 
@@ -840,9 +838,6 @@ function buildPredictedRouteCandidate(
 }
 
 function buildVoyageFromTrack(input: BuildVoyageInput): DatasetVoyage {
-  // Some cleaned AIS files contain routeId points that no longer follow a
-  // spatially continuous order. Rebuild the route before generating geometry,
-  // but keep timestamps themselves untouched for time-based metadata.
   const orderedTrack =
     input.sourceType === "real"
       ? normalizeTrackOrder(input.track, input.origin, input.destination)
@@ -1196,8 +1191,8 @@ export async function buildRealDataset(cleanedDataDir: string): Promise<RealData
   };
 }
 
-export function buildMockVoyages(
-  seeds: MockVoyageSeed[],
+export function buildSupplementalVoyages(
+  seeds: SupplementalVoyageSeed[],
   latestRealIndex: number
 ): DatasetVoyage[] {
   return seeds.map((seed, seedIndex) => {
@@ -1229,10 +1224,10 @@ export function buildMockVoyages(
       voyageId: seed.voyageId,
       voyageIndex: latestRealIndex + seedIndex + 1,
       label: seed.label,
-      sourceType: "mock",
+      sourceType: "supplemental",
       origin: seed.source,
       destination: seed.target,
-      vesselId: `mock-vessel-${seedIndex + 1}`,
+      vesselId: `supplemental-vessel-${seedIndex + 1}`,
       track,
       referenceRoute,
       referenceSpeedProfile: profile
@@ -1249,4 +1244,4 @@ export function resolveProjectPath(...segments: string[]): string {
   return projectPath(...segments);
 }
 
-export type { MockVoyageSeed, PortFlowSeed };
+export type { SupplementalVoyageSeed, PortFlowSeed };

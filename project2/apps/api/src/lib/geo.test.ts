@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildMedianProfile, buildMockVoyages } from "./build-dataset.js";
+import { buildMedianProfile, buildSupplementalVoyages } from "./build-dataset.js";
 import { parseLineStringWkt } from "./geo.js";
 
 describe("geo and dataset helpers", () => {
@@ -27,12 +27,12 @@ describe("geo and dataset helpers", () => {
     expect(profile[3]).toBe(15);
   });
 
-  it("keeps mock voyages isolated as mock source type", () => {
-    const voyages = buildMockVoyages(
+  it("keeps supplemental voyages isolated as supplemental source type", () => {
+    const voyages = buildSupplementalVoyages(
       [
         {
-          voyageId: "mock-1",
-          label: "Mock 1",
+          voyageId: "supplemental-1",
+          label: "Supplemental 1",
           source: "Shanghai",
           target: "Ningbo",
           startTs: "2025-09-25T08:00:00+08:00",
@@ -47,7 +47,7 @@ describe("geo and dataset helpers", () => {
       ],
       97
     );
-    expect(voyages[0].sourceType).toBe("mock");
+    expect(voyages[0].sourceType).toBe("supplemental");
     expect(voyages[0].voyageIndex).toBe(98);
   });
 });

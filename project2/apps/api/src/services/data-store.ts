@@ -15,9 +15,9 @@ import type {
   VoyageSummary
 } from "../../../../shared/contracts.js";
 import {
-  buildMockVoyages,
+  buildSupplementalVoyages,
   readJsonFile,
-  type MockVoyageSeed,
+  type SupplementalVoyageSeed,
   type PortFlowSeed
 } from "../lib/build-dataset.js";
 import { computeBounds, haversineNm } from "../lib/geo.js";
@@ -48,20 +48,20 @@ const GENERATED_VOYAGES_DIR = projectPath(
   "generated",
   "voyages"
 );
-const MOCK_VOYAGES_PATH = projectPath(
+const SUPPLEMENTAL_VOYAGES_PATH = projectPath(
   "data",
-  "mock",
-  "mock-voyage-seeds.json"
+  "support",
+  "supplemental-voyage-seeds.json"
 );
 const PORT_FLOW_SEEDS_PATH = projectPath(
   "data",
-  "mock",
-  "port-flow-seeds.json"
+  "support",
+  "port-flow-context.json"
 );
 const ENVIRONMENT_SEEDS_PATH = projectPath(
   "data",
-  "mock",
-  "environment-seeds.json"
+  "support",
+  "environment-context.json"
 );
 const CHECK_ANIMATION_PATH = projectPath(
   "data",
@@ -93,12 +93,12 @@ async function ensureDiagnosticsFile(): Promise<void> {
 
 async function loadDataset(): Promise<CompositeDataset> {
   const real = await readJsonFile<RealDataset>(GENERATED_DATA_PATH);
-  const mockSeeds = await readJsonFile<MockVoyageSeed[]>(MOCK_VOYAGES_PATH);
+  const supplementalSeeds = await readJsonFile<SupplementalVoyageSeed[]>(SUPPLEMENTAL_VOYAGES_PATH);
   const portFlowSeeds = await readJsonFile<PortFlowSeed[]>(PORT_FLOW_SEEDS_PATH);
   const environmentSeeds = await readJsonFile<EnvironmentSeedFile>(ENVIRONMENT_SEEDS_PATH);
   return {
     real,
-    mockVoyages: buildMockVoyages(mockSeeds, real.voyages.length),
+    supplementalVoyages: buildSupplementalVoyages(supplementalSeeds, real.voyages.length),
     portFlowSeeds,
     environmentSeeds
   };
@@ -341,7 +341,7 @@ function seededWeights(startDay: string, endDay: string): EnvironmentWeightsPayl
     },
     normalized: true,
     computedAt: endDay,
-    sourceType: "mock"
+    sourceType: "supplemental"
   };
 }
 
@@ -409,9 +409,9 @@ function buildDataDescription(dataset: CompositeDataset, timeFilter: TimeFilter)
     },
     {
       title: "Environment Layers",
-      value: "Mock assisted",
-      detail: "Wind, current, and wave layers remain synthetic support layers for visualization.",
-      sourceType: "mock"
+      value: "Context assisted",
+      detail: "Wind, current, and wave layers provide supporting environmental context for visualization.",
+      sourceType: "supplemental"
     }
   ];
 }
@@ -557,13 +557,13 @@ function buildRouteGeometry(voyage: DatasetVoyage, timeFilter: TimeFilter, ts?: 
 }
 
 function findVoyageById(dataset: CompositeDataset, voyageId: string): DatasetVoyage | undefined {
-  return [...dataset.real.voyages, ...dataset.mockVoyages].find((voyage) => voyage.voyageId === voyageId);
+  return [...dataset.real.voyages, ...dataset.supplementalVoyages].find((voyage) => voyage.voyageId === voyageId);
 }
 
 async function loadVoyageForDetail(dataset: CompositeDataset, voyageId: string): Promise<DatasetVoyage | undefined> {
-  const mockVoyage = dataset.mockVoyages.find((voyage) => voyage.voyageId === voyageId);
-  if (mockVoyage) {
-    return mockVoyage;
+  const supplementalVoyage = dataset.supplementalVoyages.find((voyage) => voyage.voyageId === voyageId);
+  if (supplementalVoyage) {
+    return supplementalVoyage;
   }
   return (await loadRealVoyageDetail(voyageId)) ?? findVoyageById(dataset, voyageId);
 }
@@ -745,7 +745,7 @@ export async function getEnvironmentLayer(
   return {
     layer,
     ts,
-    sourceType: "mock",
+    sourceType: "supplemental",
     vectors
   };
 }

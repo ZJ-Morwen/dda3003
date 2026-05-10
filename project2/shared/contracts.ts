@@ -1,4 +1,4 @@
-export type SourceType = "real" | "derived" | "mock";
+export type SourceType = "real" | "derived" | "supplemental";
 
 export interface TimeFilter {
   mode: "instant" | "range";
@@ -215,5 +215,5 @@ export const ENVIRONMENT_LAYER_LABELS: Record<"wind" | "current" | "wave", strin
 export const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
   real: "Real Data",
   derived: "Derived Data",
-  mock: "Mock Data"
+  supplemental: "Supplemental Data"
 };

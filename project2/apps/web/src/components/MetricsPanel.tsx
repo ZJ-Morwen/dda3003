@@ -56,7 +56,8 @@ export function MetricsPanel({ metrics }: MetricsPanelProps) {
           <p>Current voyage vs reference route</p>
           <p className="panel-note">
             Emission Index is a normalized relative indicator used to compare emission burden
-            between voyages. It is not an absolute CO2 measurement.
+            between voyages. It is not an absolute CO2 measurement. Waiting time outside a port
+            is included because it can still produce emissions.
           </p>
         </div>
       </div>

@@ -9,7 +9,7 @@ export function DataCards({ cards }: DataCardsProps) {
     <div className="panel">
       <div className="panel-header">
         <h3>Data Notes</h3>
-        <p>Real, derived, and mock sources are shown separately.</p>
+        <p>Real, derived, and supplemental sources are shown separately.</p>
       </div>
       <div className="card-grid">
         {cards.map((card) => (
